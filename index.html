@@ -1640,19 +1640,7 @@ function App() {
             return null;
         };
 
-        const getTimeBasedObjectProgress = (obj, s) => {
-            if (!obj) return -1;
-            const duration = Math.max(1, obj.duration || 1);
-            return (s.time.tick - obj.startTick) / duration;
-        };
-
         const getCurrentClimb = (s) => Math.max(0, s.baseCameraY - s.cameraY);
-
-        const getVisibilityEnvelope = (progress) => {
-            const fadeIn = smoothStep(0.00, 0.16, progress);
-            const fadeOut = 1 - smoothStep(0.84, 1.00, progress);
-            return fadeIn * fadeOut;
-        };
 
         const chooseRandomSpaceType = (lastType = null) => {
             const pool = RANDOM_SPACE_TYPES.filter((type) => type !== lastType);
@@ -1660,12 +1648,21 @@ function App() {
             return source[Math.floor(Math.random() * source.length)] || RANDOM_SPACE_TYPES[0];
         };
 
-        const createSpaceObjectInstance = (type, startTick = 0, spawnClimb = 0) => {
+        const getNextSpaceTriggerScore = (score) => {
+            if (score < 5) return 5;
+            if (score < 11) return 11;
+            if (score < SPACE_RANDOM_START_SCORE) return SPACE_RANDOM_START_SCORE;
+            return score + SPACE_RANDOM_INTERVAL;
+        };
+
+        const createSpaceObjectInstance = (type, startTick = 0, spawnClimb = 0, spawnScore = 0) => {
+            const nextTriggerScore = getNextSpaceTriggerScore(spawnScore);
             const base = {
                 type,
                 startTick,
                 spawnClimb,
-                duration: 420,
+                spawnScore,
+                endScore: nextTriggerScore,
                 size: 220,
                 depth: "back",
                 mirrorX: false,
@@ -1676,37 +1673,46 @@ function App() {
                 alignToPath: false,
                 angleOffset: 0,
                 mode: "drift",
+                entryXOffset: 0,
+                entryYOffset: -0.03,
                 driftX: 0,
                 driftY: 0,
-                parallax: 0.013
+                levelDropPx: 16
             };
 
             const planetVariants = {
-                planet01: { duration: 460, size: 228, x: 0.76, y: 0.18, driftX: -0.06, driftY: 0.03, rotation: 0.03, floatAmp: 6, parallax: 0.011 },
-                planet02: { duration: 450, size: 218, x: 0.28, y: 0.24, driftX: 0.05, driftY: -0.02, rotation: -0.04, floatAmp: 6, parallax: 0.011 },
-                planet03: { duration: 470, size: 280, x: 0.68, y: 0.21, driftX: -0.04, driftY: 0.02, rotation: -0.07, floatAmp: 7, parallax: 0.010 },
-                planet04: { duration: 450, size: 246, x: 0.30, y: 0.17, driftX: 0.04, driftY: 0.02, rotation: 0.05, floatAmp: 6, parallax: 0.010 },
-                planet05: { duration: 430, size: 176, x: 0.73, y: 0.25, driftX: -0.05, driftY: 0.03, rotation: 0.04, floatAmp: 5, parallax: 0.012 },
-                planet06: { duration: 445, size: 210, x: 0.34, y: 0.18, driftX: 0.05, driftY: 0.03, rotation: 0.05, floatAmp: 6, parallax: 0.011 },
-                planet07: { duration: 500, size: 236, x: 0.78, y: 0.16, driftX: -0.05, driftY: 0.025, rotation: 0.02, floatAmp: 5, parallax: 0.010 }
+                planet01: { size: 228, x: 0.76, y: 0.18, entryXOffset: 0.06, entryYOffset: -0.04, driftX: -0.02, driftY: 0.015, rotation: 0.03, floatAmp: 6, levelDropPx: 18 },
+                planet02: { size: 218, x: 0.28, y: 0.24, entryXOffset: -0.06, entryYOffset: -0.05, driftX: 0.02, driftY: 0.01, rotation: -0.04, floatAmp: 6, levelDropPx: 18 },
+                planet03: { size: 280, x: 0.68, y: 0.21, entryXOffset: 0.05, entryYOffset: -0.04, driftX: -0.018, driftY: 0.012, rotation: -0.07, floatAmp: 7, levelDropPx: 20 },
+                planet04: { size: 246, x: 0.30, y: 0.17, entryXOffset: -0.05, entryYOffset: -0.04, driftX: 0.02, driftY: 0.014, rotation: 0.05, floatAmp: 6, levelDropPx: 18 },
+                planet05: { size: 176, x: 0.73, y: 0.25, entryXOffset: 0.06, entryYOffset: -0.03, driftX: -0.02, driftY: 0.015, rotation: 0.04, floatAmp: 5, levelDropPx: 16 },
+                planet06: { size: 210, x: 0.34, y: 0.18, entryXOffset: -0.06, entryYOffset: -0.03, driftX: 0.02, driftY: 0.014, rotation: 0.05, floatAmp: 6, levelDropPx: 18 },
+                planet07: { size: 236, x: 0.78, y: 0.16, entryXOffset: 0.07, entryYOffset: -0.04, driftX: -0.02, driftY: 0.012, rotation: 0.02, floatAmp: 5, levelDropPx: 18 }
             };
 
             if (planetVariants[type]) {
-                return { ...base, ...planetVariants[type] };
+                const variant = planetVariants[type];
+                const sizeMultiplier = 1 + Math.random();
+                return {
+                    ...base,
+                    ...variant,
+                    size: Math.round(variant.size * sizeMultiplier)
+                };
             }
 
             if (type === "satellite") {
                 return {
                     ...base,
-                    duration: 420,
                     size: 210,
                     x: 0.72,
-                    y: 0.28,
-                    driftX: -0.12,
-                    driftY: 0.04,
+                    y: 0.24,
+                    entryXOffset: 0.08,
+                    entryYOffset: -0.03,
+                    driftX: -0.03,
+                    driftY: 0.02,
                     rotation: 0.15,
                     floatAmp: 3,
-                    parallax: 0.013
+                    levelDropPx: 14
                 };
             }
 
@@ -1714,18 +1720,17 @@ function App() {
                 return {
                     ...base,
                     mode: "flyby",
-                    duration: 210,
                     depth: "front",
                     size: 198,
-                    fromX: -0.18,
-                    fromY: 0.92,
-                    cpX: 0.30,
-                    cpY: 0.52,
-                    toX: 0.90,
-                    toY: -0.12,
+                    fromX: -0.15,
+                    fromY: 0.88,
+                    cpX: 0.18,
+                    cpY: 0.58,
+                    toX: 0.88,
+                    toY: -0.08,
                     alignToPath: true,
                     angleOffset: Math.PI / 2,
-                    parallax: 0.006
+                    levelDropPx: 18
                 };
             }
 
@@ -1733,18 +1738,17 @@ function App() {
                 return {
                     ...base,
                     mode: "flyby",
-                    duration: 190,
                     depth: "front",
                     size: 214,
-                    fromX: 1.14,
-                    fromY: 0.02,
-                    cpX: 0.60,
-                    cpY: 0.20,
-                    toX: -0.18,
-                    toY: 0.84,
+                    fromX: 1.08,
+                    fromY: 0.06,
+                    cpX: 0.62,
+                    cpY: 0.24,
+                    toX: -0.14,
+                    toY: 0.82,
                     alignToPath: true,
                     angleOffset: -Math.PI * 0.75,
-                    parallax: 0.008
+                    levelDropPx: 18
                 };
             }
 
@@ -1755,11 +1759,13 @@ function App() {
                     size: 194,
                     x: 0.34,
                     y: 0.22,
-                    driftX: 0.10,
-                    driftY: -0.02,
+                    entryXOffset: -0.08,
+                    entryYOffset: -0.03,
+                    driftX: 0.03,
+                    driftY: 0.01,
                     rotation: 0.03,
                     floatAmp: 5,
-                    parallax: 0.016
+                    levelDropPx: 15
                 };
             }
 
@@ -1771,13 +1777,13 @@ function App() {
         };
 
         const activateNextSpaceObject = (s, type = null) => {
-            const nextType = type || s.deco.pendingSpaceQueue.shift() || null;
+            const nextType = type || null;
             if (!nextType) {
                 s.deco.activeSpaceObject = null;
                 return;
             }
 
-            s.deco.activeSpaceObject = createSpaceObjectInstance(nextType, s.time.tick, getCurrentClimb(s));
+            s.deco.activeSpaceObject = createSpaceObjectInstance(nextType, s.time.tick, getCurrentClimb(s), s.score);
         };
 
         const triggerSpaceAssetForScore = (s) => {
@@ -1794,21 +1800,22 @@ function App() {
                 s.deco.lastRandomSpaceType = nextType;
             }
 
-            if (s.deco.activeSpaceObject) {
-                s.deco.pendingSpaceQueue.push(nextType);
-                return;
-            }
-
             activateNextSpaceObject(s, nextType);
         };
 
         const getSpaceObjectWorldState = (obj, s) => {
-            const progressRaw = getTimeBasedObjectProgress(obj, s);
-            if (progressRaw < 0 || progressRaw > 1) return null;
+            if (!obj) return null;
 
-            const progress = easeInOut(progressRaw);
-            const visibility = getVisibilityEnvelope(progressRaw);
             const relativeClimb = Math.max(0, getCurrentClimb(s) - (obj.spawnClimb || 0));
+            const scoreWindow = Math.max(1, (obj.endScore || (obj.spawnScore + 1)) - (obj.spawnScore || 0));
+            const climbWindow = Math.max(1, scoreWindow * Math.max(1, s.stepUp));
+            const progressRaw = clamp(relativeClimb / climbWindow, 0, 1);
+            const progress = easeInOut(progressRaw);
+            const entranceProgress = clamp((s.time.tick - (obj.startTick || 0)) / 26, 0, 1);
+            const fadeIn = smoothStep(0.0, 1.0, entranceProgress);
+            const fadeDown = lerp(1, 0.08, smoothStep(0.0, 1.0, progressRaw));
+            const visibility = fadeIn * fadeDown;
+            const levelProgress = relativeClimb / Math.max(1, s.stepUp);
 
             let x = 0;
             let y = 0;
@@ -1820,7 +1827,6 @@ function App() {
 
                 x = s.width * quadraticBezier(obj.fromX, cpX, obj.toX, progress);
                 y = s.height * quadraticBezier(obj.fromY, cpY, obj.toY, progress);
-                y += relativeClimb * (obj.parallax || 0);
 
                 if (obj.alignToPath) {
                     const dx = s.width * quadraticBezierTangent(obj.fromX, cpX, obj.toX, progress);
@@ -1828,11 +1834,13 @@ function App() {
                     rotation = Math.atan2(dy, dx) + (obj.angleOffset || 0);
                 }
             } else {
-                const driftAmt = progressRaw - 0.5;
-                x = s.width * ((obj.x ?? 0.5) + driftAmt * (obj.driftX || 0));
-                y = s.height * ((obj.y ?? 0.22) + driftAmt * (obj.driftY || 0));
-                y += relativeClimb * (obj.parallax || (obj.depth === "front" ? 0.016 : 0.011));
+                const entryXOffset = obj.entryXOffset || 0;
+                const entryYOffset = obj.entryYOffset || 0;
+                x = s.width * ((obj.x ?? 0.5) + lerp(entryXOffset, obj.driftX || 0, progress));
+                y = s.height * ((obj.y ?? 0.22) + lerp(entryYOffset, obj.driftY || 0, progress));
             }
+
+            y += levelProgress * (obj.levelDropPx || 14);
 
             if (obj.floatAmp) {
                 const phase = obj.phase || 0;
@@ -1862,10 +1870,7 @@ function App() {
             if (!active) return;
 
             const state = getSpaceObjectWorldState(active, s);
-            if (!state) {
-                activateNextSpaceObject(s);
-                return;
-            }
+            if (!state) return;
 
             if (
                 state.x < -state.size * 1.3 ||
@@ -1885,10 +1890,6 @@ function App() {
                 state.rotation,
                 state.mirrorX
             );
-
-            if (state.progress >= 0.999) {
-                activateNextSpaceObject(s);
-            }
         };
 
         const drawAtmosphereOverlay = (s, climb) => {
