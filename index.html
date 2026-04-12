@@ -346,7 +346,7 @@ const ASTRONAUT_FALL_TOTAL_FRAMES = 20;
 const ASTRONAUT_TOTAL_FRAMES = 16;
 const ASTRONAUT_JUMP_FRAME_SEQUENCE = [6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
 const ASTRONAUT_JUMP_MOTION_STOPS = [0.0, 0.08, 0.18, 0.42, 0.47, 0.5, 0.58, 0.68, 0.78, 0.88, 0.96, 1.0];
-const FALL_ANIMATION_FRAMES = 18;
+const FALL_ANIMATION_FRAMES = 32;
 const WRONG_FALL_START_OFFSET = 14;
 const FRAME_TIME_AT_60FPS = 1000 / 60;
 const RESPAWN_JUMP_FRAMES = 28;
@@ -1455,7 +1455,7 @@ function App() {
             return asset.canvas || asset.img || null;
         };
 
-        const drawFloatingAsset = (asset, alpha, x, y, size, rotation = 0, mirrorX = false) => {
+        const drawFloatingAsset = (asset, alpha, x, y, size, rotation = 0, mirrorX = false, options = {}) => {
             if (!asset || alpha <= 0.01 || size <= 0) return;
 
             const img = getImageFromAsset(asset);
@@ -1464,12 +1464,56 @@ function App() {
             const scale = size / Math.max(img.width, img.height);
             const drawW = img.width * scale;
             const drawH = img.height * scale;
+            const { rocketFlame = false, flameFlicker = 0 } = options;
 
             ctx.save();
             ctx.globalAlpha = alpha;
             ctx.translate(x, y);
             if (mirrorX) ctx.scale(-1, 1);
             if (rotation) ctx.rotate(rotation);
+
+            if (rocketFlame) {
+                const flicker = 0.88 + (Math.sin(flameFlicker * 0.23) * 0.08) + (Math.sin(flameFlicker * 0.61 + 1.4) * 0.06);
+                const exhaustX = -drawW * 0.30;
+                const innerLength = drawW * 0.34 * flicker;
+                const outerLength = drawW * 0.54 * flicker;
+                const plumeRadius = drawH * 0.16;
+
+                const outerGrad = ctx.createLinearGradient(exhaustX - outerLength, 0, exhaustX + drawW * 0.04, 0);
+                outerGrad.addColorStop(0, 'rgba(255, 70, 0, 0)');
+                outerGrad.addColorStop(0.18, 'rgba(255, 90, 0, 0.30)');
+                outerGrad.addColorStop(0.48, 'rgba(255, 150, 0, 0.65)');
+                outerGrad.addColorStop(0.72, 'rgba(255, 210, 90, 0.72)');
+                outerGrad.addColorStop(1, 'rgba(255, 240, 180, 0)');
+
+                ctx.fillStyle = outerGrad;
+                ctx.beginPath();
+                ctx.moveTo(exhaustX + drawW * 0.02, 0);
+                ctx.quadraticCurveTo(exhaustX - outerLength * 0.18, -plumeRadius * 1.45, exhaustX - outerLength, 0);
+                ctx.quadraticCurveTo(exhaustX - outerLength * 0.18, plumeRadius * 1.45, exhaustX + drawW * 0.02, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                const midGrad = ctx.createLinearGradient(exhaustX - innerLength, 0, exhaustX + drawW * 0.03, 0);
+                midGrad.addColorStop(0, 'rgba(255, 120, 0, 0)');
+                midGrad.addColorStop(0.2, 'rgba(255, 145, 0, 0.72)');
+                midGrad.addColorStop(0.65, 'rgba(255, 235, 150, 0.92)');
+                midGrad.addColorStop(1, 'rgba(255, 255, 220, 0)');
+
+                ctx.fillStyle = midGrad;
+                ctx.beginPath();
+                ctx.moveTo(exhaustX + drawW * 0.03, 0);
+                ctx.quadraticCurveTo(exhaustX - innerLength * 0.16, -plumeRadius * 0.82, exhaustX - innerLength, 0);
+                ctx.quadraticCurveTo(exhaustX - innerLength * 0.16, plumeRadius * 0.82, exhaustX + drawW * 0.03, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,235,0.85)';
+                ctx.beginPath();
+                ctx.ellipse(exhaustX - innerLength * 0.16, 0, drawW * 0.06, plumeRadius * 0.38, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
             ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
             ctx.restore();
         };
@@ -1567,12 +1611,7 @@ function App() {
             const alpha = 0.92 * getLayerFade(climb, 1900, 4000);
             if (alpha <= 0.01) return;
 
-            const clipBottom = s.height * 0.36;
-
             ctx.save();
-            ctx.beginPath();
-            ctx.rect(0, 0, s.width, clipBottom);
-            ctx.clip();
             ctx.globalAlpha = alpha;
             ctx.drawImage(metrics.img, metrics.x, metrics.y, metrics.drawW, metrics.drawH);
             ctx.restore();
@@ -1739,18 +1778,25 @@ function App() {
             }
 
             if (type === "rocket") {
+                const flyRight = Math.random() < 0.5;
+                const fromX = flyRight ? -0.18 : 1.18;
+                const toX = flyRight ? 1.10 : -0.10;
+                const fromY = 0.56 + Math.random() * 0.30;
+                const toY = Math.max(-0.22, fromY - (0.58 + Math.random() * 0.18));
+
                 return {
                     ...base,
                     mode: "flyby",
                     depth: "front",
-                    size: 198,
-                    fromX: -0.16,
-                    fromY: 0.90,
-                    toX: 1.04,
-                    toY: -0.18,
+                    size: 180 + Math.round(Math.random() * 40),
+                    fromX,
+                    fromY,
+                    toX,
+                    toY,
                     alignToPath: true,
-                    angleOffset: Math.PI / 2,
-                    flybyDuration: 250,
+                    angleOffset: flyRight ? Math.PI / 2 : -Math.PI / 2,
+                    mirrorX: !flyRight,
+                    flybyDuration: 210 + Math.round(Math.random() * 70),
                     levelDropPx: 0,
                     fadeFloor: 1
                 };
@@ -1852,6 +1898,8 @@ function App() {
             const entranceProgress = smoothStep(0, 1, clamp(elapsedTicks / 42, 0, 1));
             const fadeFloor = obj.fadeFloor ?? 0.06;
             const fadeDown = lerp(1, fadeFloor, smoothStep(0, 1, fadeProgress));
+            const climbDelta = Math.max(0, getCurrentClimb(s) - (obj.spawnClimb || 0));
+            const verticalFollow = climbDelta * (obj.followClimbFactor ?? 1);
 
             let x = 0;
             let y = 0;
@@ -1868,7 +1916,7 @@ function App() {
                 const toY = obj.toY ?? 0.5;
 
                 x = s.width * lerp(fromX, toX, flightProgress);
-                y = s.height * lerp(fromY, toY, flightProgress);
+                y = s.height * lerp(fromY, toY, flightProgress) + verticalFollow;
                 progress = flightProgress;
                 visibility = smoothStep(0, 1, clamp(elapsedTicks / 10, 0, 1));
 
@@ -1900,7 +1948,7 @@ function App() {
 
                 y = baseY + panY;
                 y += Math.sin(elapsedTicks * bobSpeedY + phase * 1.07) * bobAmpY;
-                y += scoreDelta * (obj.levelDropPx || 14);
+                y += verticalFollow;
 
                 rotation = (obj.rotation || 0) + Math.sin(elapsedTicks * 0.0022 + phase) * (obj.rotationDrift || 0);
             }
@@ -1934,7 +1982,11 @@ function App() {
                         state.y,
                         state.size,
                         state.rotation,
-                        state.mirrorX
+                        state.mirrorX,
+                        {
+                            rocketFlame: active.type === "rocket",
+                            flameFlicker: s.time.tick + (active.spawnTick || 0)
+                        }
                     );
                 }
             }
@@ -1954,7 +2006,11 @@ function App() {
                     state.y,
                     state.size,
                     state.rotation,
-                    state.mirrorX
+                    state.mirrorX,
+                    {
+                        rocketFlame: obj.type === "rocket",
+                        flameFlicker: s.time.tick + (obj.spawnTick || 0)
+                    }
                 );
             });
 
