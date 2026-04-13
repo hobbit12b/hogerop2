@@ -320,11 +320,16 @@ const MOON_SCORE = 8;
 const SATELLITE_SCORE = 14;
 const SPACE_RANDOM_START_SCORE = 20;
 const SPACE_RANDOM_INTERVAL = 6;
+const FLYBY_VISIBILITY_START = 220;
+const FLYBY_VISIBILITY_RANGE = 260;
 const ROCKET_FLYBY_START_SCORE = 8;
-const ROCKET_FLYBY_INTERVAL = 4;
-const METEOR_FLYBY_START_SCORE = 10;
-const METEOR_FLYBY_CHANCE = 0.18;
-const METEOR_FLYBY_COOLDOWN = 5;
+const ROCKET_FLYBY_MIN_GAP = 3;
+const ROCKET_FLYBY_CHANCE = 0.55;
+const ROCKET_FLYBY_FORCE_AFTER = 8;
+const METEOR_FLYBY_START_SCORE = 12;
+const METEOR_FLYBY_CHANCE = 0.2;
+const METEOR_FLYBY_MIN_GAP = 6;
+const METEOR_FLYBY_FORCE_AFTER = 18;
 const FIXED_SPACE_SCORE_EVENTS = Object.freeze({
     [MOON_SCORE]: "planet07",
     [SATELLITE_SCORE]: "satellite"
@@ -941,6 +946,7 @@ function App() {
             activeMeteorFlybys: [],
             pendingSpaceQueue: [],
             lastRandomSpaceType: null,
+            lastRocketScore: -999,
             lastMeteorScore: -999
         }
     });
@@ -1275,6 +1281,7 @@ function App() {
         s.deco.activeMeteorFlybys = [];
         s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastRocketScore = -999;
         s.deco.lastMeteorScore = -999;
         setTargetLetter("");
 
@@ -1320,6 +1327,7 @@ function App() {
         s.deco.activeMeteorFlybys = [];
         s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastRocketScore = -999;
         s.deco.lastMeteorScore = -999;
 
         s.fallCameraStartY = s.cameraY;
@@ -1821,7 +1829,7 @@ function App() {
                     ...base,
                     mode: "flyby",
                     depth: "front",
-                    size: 174 + Math.round(Math.random() * 38),
+                    size: 184 + Math.round(Math.random() * 42),
                     fromX,
                     fromY,
                     toX,
@@ -1829,7 +1837,7 @@ function App() {
                     alignToPath: true,
                     angleOffset: flyRight ? Math.PI / 2 : -Math.PI / 2,
                     mirrorX: !flyRight,
-                    flybyDuration: 220 + Math.round(Math.random() * 90),
+                    flybyDuration: 320 + Math.round(Math.random() * 120),
                     levelDropPx: 0,
                     fadeFloor: 1
                 };
@@ -1846,7 +1854,7 @@ function App() {
                     ...base,
                     mode: "flyby",
                     depth: "front",
-                    size: 184 + Math.round(Math.random() * 34),
+                    size: 196 + Math.round(Math.random() * 40),
                     fromX,
                     fromY,
                     toX,
@@ -1854,7 +1862,7 @@ function App() {
                     alignToPath: true,
                     angleOffset: flyRight ? -Math.PI * 0.75 : Math.PI * 0.75,
                     mirrorX: !flyRight,
-                    flybyDuration: 170 + Math.round(Math.random() * 40),
+                    flybyDuration: 220 + Math.round(Math.random() * 80),
                     levelDropPx: 0,
                     fadeFloor: 1
                 };
@@ -1919,26 +1927,36 @@ function App() {
 
         const triggerRocketFlybyForScore = (s) => {
             if (s.score < ROCKET_FLYBY_START_SCORE) return;
-            if ((s.score - ROCKET_FLYBY_START_SCORE) % ROCKET_FLYBY_INTERVAL !== 0) return;
 
             const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
             if (hasRocketInFlight) return;
 
+            const scoresSinceLastRocket = s.score - (s.deco.lastRocketScore ?? -999);
+            if (scoresSinceLastRocket < ROCKET_FLYBY_MIN_GAP) return;
+
+            const shouldForceRocket = scoresSinceLastRocket >= ROCKET_FLYBY_FORCE_AFTER;
+            if (!shouldForceRocket && Math.random() > ROCKET_FLYBY_CHANCE) return;
+
             s.deco.activeRocketFlybys = [
                 ...activeFlybys,
                 createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)
             ];
+            s.deco.lastRocketScore = s.score;
         };
 
         const triggerMeteorFlybyForScore = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
-            if ((s.score - (s.deco.lastMeteorScore ?? -999)) < METEOR_FLYBY_COOLDOWN) return;
-            if (Math.random() > METEOR_FLYBY_CHANCE) return;
 
             const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
             const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasMeteorInFlight) return;
+
+            const scoresSinceLastMeteor = s.score - (s.deco.lastMeteorScore ?? -999);
+            if (scoresSinceLastMeteor < METEOR_FLYBY_MIN_GAP) return;
+
+            const shouldForceMeteor = scoresSinceLastMeteor >= METEOR_FLYBY_FORCE_AFTER;
+            if (!shouldForceMeteor && Math.random() > METEOR_FLYBY_CHANCE) return;
 
             s.deco.activeMeteorFlybys = [
                 ...activeFlybys,
@@ -2030,10 +2048,13 @@ function App() {
 
         const drawSpaceAssets = (s, climb) => {
             const visibleSpace = clamp((climb - SPACE_START) / 450, 0, 1);
-            if (visibleSpace <= 0.01) return;
+            const visibleFlybys = clamp((climb - FLYBY_VISIBILITY_START) / FLYBY_VISIBILITY_RANGE, 0, 1);
+            const hasActiveFlybys = (Array.isArray(s.deco.activeRocketFlybys) && s.deco.activeRocketFlybys.length > 0)
+                || (Array.isArray(s.deco.activeMeteorFlybys) && s.deco.activeMeteorFlybys.length > 0);
+            if (visibleSpace <= 0.01 && visibleFlybys <= 0.01 && !hasActiveFlybys) return;
 
             const active = s.deco.activeSpaceObject;
-            if (active) {
+            if (active && visibleSpace > 0.01) {
                 const state = getSpaceObjectWorldState(active, s);
                 if (state && !state.outOfView) {
                     drawFloatingAsset(
@@ -2062,7 +2083,7 @@ function App() {
                 remainingRocketFlybys.push(obj);
                 drawFloatingAsset(
                     getSpaceAsset(obj.type),
-                    visibleSpace * state.alpha,
+                    visibleFlybys * state.alpha,
                     state.x,
                     state.y,
                     state.size,
@@ -2527,8 +2548,8 @@ function App() {
             const climb = Math.max(0, s.baseCameraY - s.cameraY);
 
             drawSky(s, climb);
-            drawCloudLayer(s, climb);
             drawMountainsLayer(s, climb);
+            drawCloudLayer(s, climb);
             drawGroundLayer(s, climb);
             drawStars(s, climb);
             drawSpaceAssets(s, climb);
