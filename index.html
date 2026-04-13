@@ -320,16 +320,13 @@ const MOON_SCORE = 8;
 const SATELLITE_SCORE = 14;
 const SPACE_RANDOM_START_SCORE = 20;
 const SPACE_RANDOM_INTERVAL = 6;
-const ROCKET_FLYBY_START_SCORE = 9;
-const ROCKET_FLYBY_MIN_GAP = 2;
-const ROCKET_FLYBY_CHANCE = 0.72;
-const ROCKET_FLYBY_FORCE_AFTER = 5;
-const METEOR_FLYBY_START_SCORE = 9;
-const METEOR_FLYBY_CHANCE = 0.24;
-const METEOR_FLYBY_MIN_GAP = 4;
-const METEOR_FLYBY_FORCE_AFTER = 12;
 const FLYBY_VISIBILITY_START_SCORE = 9;
 const FLYBY_VISIBILITY_SCORE_RANGE = 2;
+const ROCKET_FLYBY_START_SCORE = 9;
+const ROCKET_FLYBY_INTERVAL = 2;
+const METEOR_FLYBY_START_SCORE = 9;
+const METEOR_FLYBY_CHANCE = 0.26;
+const METEOR_FLYBY_COOLDOWN = 4;
 const FIXED_SPACE_SCORE_EVENTS = Object.freeze({
     [MOON_SCORE]: "planet07",
     [SATELLITE_SCORE]: "satellite"
@@ -1015,7 +1012,7 @@ function App() {
 
     const playBackgroundMusic = useCallback(() => {
         const audio = backgroundMusicRef.current;
-        if (!audio || !musicEnabled || document.hidden) return;
+        if (!audio || !musicEnabled) return;
         audio.play().catch((error) => {
             console.warn("Achtergrondmuziek kon niet afspelen.", error);
         });
@@ -1037,7 +1034,7 @@ function App() {
         }
 
         const audio = backgroundMusicRef.current;
-        if (!audio || document.hidden) return;
+        if (!audio) return;
         audio.play().catch((error) => {
             console.warn("Achtergrondmuziek kon niet afspelen.", error);
         });
@@ -1094,7 +1091,7 @@ function App() {
                 return;
             }
 
-            if (musicEnabled && musicWasPlayingBeforeHideRef.current) {
+            if (musicEnabled && (musicWasPlayingBeforeHideRef.current || audio.paused)) {
                 playBackgroundMusic();
             }
         };
@@ -1106,14 +1103,24 @@ function App() {
             audio.pause();
         };
 
+        const handlePageShowOrFocus = () => {
+            const audio = backgroundMusicRef.current;
+            if (!audio || !musicEnabled) return;
+            if (musicWasPlayingBeforeHideRef.current || audio.paused) {
+                playBackgroundMusic();
+            }
+        };
+
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener("pagehide", handlePageHide);
-        window.addEventListener("blur", handlePageHide);
+        window.addEventListener("pageshow", handlePageShowOrFocus);
+        window.addEventListener("focus", handlePageShowOrFocus);
 
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             window.removeEventListener("pagehide", handlePageHide);
-            window.removeEventListener("blur", handlePageHide);
+            window.removeEventListener("pageshow", handlePageShowOrFocus);
+            window.removeEventListener("focus", handlePageShowOrFocus);
         };
     }, [musicEnabled, playBackgroundMusic]);
 
@@ -1281,6 +1288,7 @@ function App() {
         s.deco.activeMeteorFlybys = [];
         s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastRocketScore = -999;
         s.deco.lastMeteorScore = -999;
         setTargetLetter("");
 
@@ -1326,6 +1334,7 @@ function App() {
         s.deco.activeMeteorFlybys = [];
         s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastRocketScore = -999;
         s.deco.lastMeteorScore = -999;
 
         s.fallCameraStartY = s.cameraY;
@@ -1827,7 +1836,7 @@ function App() {
                     ...base,
                     mode: "flyby",
                     depth: "front",
-                    size: 174 + Math.round(Math.random() * 38),
+                    size: 204 + Math.round(Math.random() * 52),
                     fromX,
                     fromY,
                     toX,
@@ -1835,7 +1844,7 @@ function App() {
                     alignToPath: true,
                     angleOffset: flyRight ? Math.PI / 2 : -Math.PI / 2,
                     mirrorX: !flyRight,
-                    flybyDuration: 220 + Math.round(Math.random() * 90),
+                    flybyDuration: 300 + Math.round(Math.random() * 110),
                     levelDropPx: 0,
                     fadeFloor: 1
                 };
@@ -1852,7 +1861,7 @@ function App() {
                     ...base,
                     mode: "flyby",
                     depth: "front",
-                    size: 184 + Math.round(Math.random() * 34),
+                    size: 214 + Math.round(Math.random() * 44),
                     fromX,
                     fromY,
                     toX,
@@ -1860,7 +1869,7 @@ function App() {
                     alignToPath: true,
                     angleOffset: flyRight ? -Math.PI * 0.75 : Math.PI * 0.75,
                     mirrorX: !flyRight,
-                    flybyDuration: 170 + Math.round(Math.random() * 40),
+                    flybyDuration: 240 + Math.round(Math.random() * 60),
                     levelDropPx: 0,
                     fadeFloor: 1
                 };
@@ -1925,36 +1934,26 @@ function App() {
 
         const triggerRocketFlybyForScore = (s) => {
             if (s.score < ROCKET_FLYBY_START_SCORE) return;
+            if ((s.score - ROCKET_FLYBY_START_SCORE) % ROCKET_FLYBY_INTERVAL !== 0) return;
 
             const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
             if (hasRocketInFlight) return;
 
-            const scoresSinceLastRocket = s.score - (s.deco.lastRocketScore ?? -999);
-            if (scoresSinceLastRocket < ROCKET_FLYBY_MIN_GAP) return;
-
-            const shouldForceRocket = scoresSinceLastRocket >= ROCKET_FLYBY_FORCE_AFTER;
-            if (!shouldForceRocket && Math.random() > ROCKET_FLYBY_CHANCE) return;
-
             s.deco.activeRocketFlybys = [
                 ...activeFlybys,
                 createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)
             ];
-            s.deco.lastRocketScore = s.score;
         };
 
         const triggerMeteorFlybyForScore = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
+            if ((s.score - (s.deco.lastMeteorScore ?? -999)) < METEOR_FLYBY_COOLDOWN) return;
+            if (Math.random() > METEOR_FLYBY_CHANCE) return;
 
             const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
             const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasMeteorInFlight) return;
-
-            const scoresSinceLastMeteor = s.score - (s.deco.lastMeteorScore ?? -999);
-            if (scoresSinceLastMeteor < METEOR_FLYBY_MIN_GAP) return;
-
-            const shouldForceMeteor = scoresSinceLastMeteor >= METEOR_FLYBY_FORCE_AFTER;
-            if (!shouldForceMeteor && Math.random() > METEOR_FLYBY_CHANCE) return;
 
             s.deco.activeMeteorFlybys = [
                 ...activeFlybys,
@@ -1995,7 +1994,7 @@ function App() {
                 x = s.width * lerp(fromX, toX, flightProgress);
                 y = s.height * lerp(fromY, toY, flightProgress) + verticalFollow;
                 progress = flightProgress;
-                visibility = smoothStep(0, 1, clamp(elapsedTicks / 16, 0, 1));
+                visibility = smoothStep(0, 1, clamp(elapsedTicks / 10, 0, 1));
 
                 if (obj.alignToPath) {
                     const dx = s.width * (toX - fromX);
@@ -2047,10 +2046,13 @@ function App() {
         const drawSpaceAssets = (s, climb) => {
             const visibleSpace = clamp((climb - SPACE_START) / 450, 0, 1);
             const visibleFlybys = clamp((s.score - FLYBY_VISIBILITY_START_SCORE + 1) / Math.max(1, FLYBY_VISIBILITY_SCORE_RANGE), 0, 1);
-            if (visibleSpace <= 0.01 && visibleFlybys <= 0.01) return;
+            const hasActiveFlybys = (Array.isArray(s.deco.activeRocketFlybys) && s.deco.activeRocketFlybys.length > 0)
+                || (Array.isArray(s.deco.activeMeteorFlybys) && s.deco.activeMeteorFlybys.length > 0);
+
+            if (visibleSpace <= 0.01 && visibleFlybys <= 0.01 && !hasActiveFlybys) return;
 
             const active = s.deco.activeSpaceObject;
-            if (active) {
+            if (active && visibleSpace > 0.01) {
                 const state = getSpaceObjectWorldState(active, s);
                 if (state && !state.outOfView) {
                     drawFloatingAsset(
