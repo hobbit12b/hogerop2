@@ -323,8 +323,8 @@ const SPACE_RANDOM_INTERVAL = 6;
 const FLYBY_VISIBILITY_START_SCORE = 8;
 const FLYBY_VISIBILITY_SCORE_RANGE = 1;
 const ROCKET_FLYBY_START_SCORE = 8;
-const ROCKET_FLYBY_FIRST_TICK_MIN = 180;
-const ROCKET_FLYBY_FIRST_TICK_MAX = 480;
+const ROCKET_FLYBY_FIRST_TICK_MIN = 90;
+const ROCKET_FLYBY_FIRST_TICK_MAX = 180;
 const ROCKET_FLYBY_TICK_MIN = 1200;
 const ROCKET_FLYBY_TICK_MAX = 3000;
 /* Raketvuur gebruikt dezelfde lokale pixelcoördinaten als raket-only-flight-test.html. */
@@ -337,7 +337,7 @@ const ROCKET_FLAME_WIDTH = 36;
 const ROCKET_SMOKE_X = 0;
 const ROCKET_SMOKE_Y = 126;
 const METEOR_FLYBY_START_SCORE = 10;
-const METEOR_FLYBY_CHANCE = 0.18;
+const METEOR_FLYBY_CHANCE = 0.135;
 const METEOR_FLYBY_COOLDOWN = 5;
 const METEOR_SMOKE_PUFFS = 8;
 const METEOR_SMOKE_LENGTH = 1.28;
@@ -2010,7 +2010,19 @@ function App() {
             s.deco.nextRocketFlybyTick = s.time.tick + minTicks + Math.random() * Math.max(1, maxTicks - minTicks);
         };
 
+        const pruneExpiredRocketFlybys = (s) => {
+            const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            s.deco.activeRocketFlybys = activeFlybys.filter((obj) => {
+                if (!obj || obj.type !== "rocket") return false;
+                const elapsedTicks = Math.max(0, s.time.tick - (obj.startTick || 0));
+                const maxFlightTicks = Math.max(1, obj.flybyDuration || 240) + 36;
+                return elapsedTicks < maxFlightTicks;
+            });
+        };
+
         const spawnRocketFlyby = (s) => {
+            pruneExpiredRocketFlybys(s);
+
             const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
             if (hasRocketInFlight) return;
@@ -2031,6 +2043,7 @@ function App() {
 
         const updateTimedRocketFlybys = (s) => {
             if (s.score < ROCKET_FLYBY_START_SCORE) return;
+            pruneExpiredRocketFlybys(s);
             if (!Number.isFinite(s.deco.nextRocketFlybyTick)) {
                 scheduleNextRocketFlyby(s, true);
             }
