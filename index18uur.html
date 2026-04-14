@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Raket vuur test</title>
 <style>
   html, body {
@@ -10,13 +10,14 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #061323;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #06111f;
+    font-family: Arial, sans-serif;
   }
   canvas {
     display: block;
     width: 100vw;
     height: 100vh;
+    background: radial-gradient(circle at 50% 35%, #18375e 0%, #071322 58%, #03070d 100%);
     touch-action: none;
   }
   .panel {
@@ -24,293 +25,324 @@
     left: 12px;
     right: 12px;
     bottom: 12px;
-    z-index: 2;
+    z-index: 5;
     background: rgba(255,255,255,0.94);
-    color: #17212d;
     border-radius: 18px;
     padding: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+    color: #1d2935;
   }
-  .title {
-    font-weight: 800;
-    font-size: 15px;
-    margin-bottom: 8px;
+  .panel h1 {
+    margin: 0 0 8px;
+    font-size: 17px;
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
   }
   label {
     display: grid;
-    grid-template-columns: 104px 1fr 48px;
-    align-items: center;
-    gap: 8px;
+    gap: 3px;
     font-size: 13px;
     font-weight: 700;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
   }
   input[type="range"] { width: 100%; }
   .buttons {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 10px;
   }
   button {
     border: 0;
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 9px 12px;
+    background: #e8edf4;
     font-weight: 800;
-    background: #ffd84d;
-    color: #17212d;
+    color: #1d2935;
   }
-  .code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 11px;
-    background: rgba(0,0,0,0.08);
-    padding: 8px;
-    border-radius: 10px;
+  .values {
     margin-top: 8px;
-    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    background: #f5f7fa;
+    border-radius: 10px;
+    padding: 8px;
+    overflow: auto;
+    white-space: nowrap;
   }
-  @media (min-width: 720px) {
-    .panel { left: 16px; right: auto; width: 560px; }
-    .grid { grid-template-columns: 1fr 1fr; }
+  @media (orientation: landscape) {
+    .panel {
+      left: auto;
+      width: 420px;
+      top: 12px;
+      bottom: auto;
+    }
+    .grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
-
 <div class="panel">
-  <div class="title">Raket + vuur test</div>
-  <div class="grid">
-    <label>Vuurhoek <input id="flameAngle" type="range" min="-180" max="180" step="1" value="90"><span id="flameAngleValue"></span></label>
-    <label>Vuur X <input id="flameX" type="range" min="-120" max="120" step="1" value="0"><span id="flameXValue"></span></label>
-    <label>Vuur Y <input id="flameY" type="range" min="-120" max="120" step="1" value="44"><span id="flameYValue"></span></label>
-    <label>Lengte <input id="flameLength" type="range" min="20" max="180" step="1" value="78"><span id="flameLengthValue"></span></label>
-    <label>Breedte <input id="flameWidth" type="range" min="8" max="80" step="1" value="34"><span id="flameWidthValue"></span></label>
-    <label>Raketgrootte <input id="rocketSize" type="range" min="110" max="320" step="1" value="215"><span id="rocketSizeValue"></span></label>
-  </div>
+  <h1>Raket met verstelbaar vuur</h1>
+  <div class="grid" id="controls"></div>
   <div class="buttons">
-    <button id="presetRight">Preset: vliegt naar rechts</button>
-    <button id="presetLeft">Preset: vliegt naar links</button>
+    <button id="reset">Reset</button>
+    <button id="toggleGuide">Hulplijnen aan</button>
+    <button id="copy">Kopieer waarden</button>
   </div>
-  <div id="snippet" class="code"></div>
+  <div class="values" id="values"></div>
 </div>
-
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const controlsEl = document.getElementById('controls');
+  const valuesEl = document.getElementById('values');
 
-const controls = {
-  flameAngle: document.getElementById("flameAngle"),
-  flameX: document.getElementById("flameX"),
-  flameY: document.getElementById("flameY"),
-  flameLength: document.getElementById("flameLength"),
-  flameWidth: document.getElementById("flameWidth"),
-  rocketSize: document.getElementById("rocketSize")
-};
+  const img = new Image();
+  img.src = 'assets/raket.png';
 
-const values = Object.fromEntries(
-  Object.keys(controls).map((key) => [key, document.getElementById(`${key}Value`)])
-);
-const snippet = document.getElementById("snippet");
+  const defaults = {
+    rocketSize: 180,
+    flameX: 0,
+    flameY: 92,
+    flameAngle: 90,
+    flameLength: 78,
+    flameWidth: 36,
+    smokeX: 0,
+    smokeY: 126,
+    speed: 6.2
+  };
 
-const rocket = new Image();
-rocket.src = "assets/raket.png";
+  const config = { ...defaults };
+  let showGuide = false;
+  let lastTs = 0;
+  let time = 0;
 
-let w = 0;
-let h = 0;
-let dpr = 1;
-let t0 = performance.now();
-let direction = 1;
+  const sliders = [
+    ['rocketSize', 'Raket grootte', 80, 260, 1],
+    ['flameX', 'Vuur X', -160, 160, 1],
+    ['flameY', 'Vuur Y', -160, 180, 1],
+    ['flameAngle', 'Vuur hoek', -180, 180, 1],
+    ['flameLength', 'Vuur lengte', 10, 180, 1],
+    ['flameWidth', 'Vuur breedte', 4, 100, 1],
+    ['smokeX', 'Rook X', -160, 160, 1],
+    ['smokeY', 'Rook Y', -160, 220, 1],
+    ['speed', 'Snelheid', 2, 12, 0.1]
+  ];
 
-function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
-  w = window.innerWidth;
-  h = window.innerHeight;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-}
-window.addEventListener("resize", resize);
-resize();
+  function makeSlider([key, label, min, max, step]) {
+    const wrap = document.createElement('label');
+    const row = document.createElement('div');
+    row.className = 'row';
+    const name = document.createElement('span');
+    const value = document.createElement('span');
+    name.textContent = label;
+    value.textContent = config[key];
+    row.append(name, value);
 
-function num(key) {
-  return Number(controls[key].value);
-}
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = min;
+    input.max = max;
+    input.step = step;
+    input.value = config[key];
+    input.addEventListener('input', () => {
+      config[key] = Number(input.value);
+      value.textContent = input.value;
+      updateValues();
+    });
 
-function updateLabels() {
-  values.flameAngle.textContent = `${num("flameAngle")}°`;
-  values.flameX.textContent = `${num("flameX")}%`;
-  values.flameY.textContent = `${num("flameY")}%`;
-  values.flameLength.textContent = `${num("flameLength")}%`;
-  values.flameWidth.textContent = `${num("flameWidth")}%`;
-  values.rocketSize.textContent = `${num("rocketSize")}px`;
-
-  snippet.textContent = `Gebruik in het spel:\nflameAngle: ${num("flameAngle")}°\nflameOriginX: ${num("flameX")}% van raketbreedte\nflameOriginY: ${num("flameY")}% van rakethoogte\nflameLength: ${num("flameLength")}% van raketbreedte\nflameWidth: ${num("flameWidth")}% van rakethoogte`;
-}
-Object.values(controls).forEach((el) => el.addEventListener("input", updateLabels));
-updateLabels();
-
-document.getElementById("presetRight").addEventListener("click", () => {
-  direction = 1;
-  controls.flameAngle.value = 90;
-  controls.flameX.value = 0;
-  controls.flameY.value = 44;
-  controls.flameLength.value = 78;
-  controls.flameWidth.value = 34;
-  updateLabels();
-});
-
-document.getElementById("presetLeft").addEventListener("click", () => {
-  direction = -1;
-  controls.flameAngle.value = 90;
-  controls.flameX.value = 0;
-  controls.flameY.value = 44;
-  controls.flameLength.value = 78;
-  controls.flameWidth.value = 34;
-  updateLabels();
-});
-
-function drawSky(now) {
-  const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, "#071222");
-  g.addColorStop(1, "#153552");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.75)";
-  for (let i = 0; i < 42; i++) {
-    const x = ((i * 131.7) % w);
-    const y = ((i * 73.9) % Math.max(1, h - 180));
-    const pulse = 0.55 + Math.sin(now * 0.002 + i) * 0.35;
-    ctx.globalAlpha = 0.24 + pulse * 0.35;
-    ctx.beginPath();
-    ctx.arc(x, y, 1.1 + (i % 3) * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawFlame(drawW, drawH, now) {
-  const angle = num("flameAngle") * Math.PI / 180;
-  const originX = drawW * (num("flameX") / 100);
-  const originY = drawH * (num("flameY") / 100);
-  const length = drawW * (num("flameLength") / 100);
-  const width = drawH * (num("flameWidth") / 100);
-  const flicker = 0.88 + Math.sin(now * 0.021) * 0.08 + Math.sin(now * 0.047 + 1.2) * 0.06;
-
-  const dirX = Math.cos(angle);
-  const dirY = Math.sin(angle);
-  const normalX = -dirY;
-  const normalY = dirX;
-
-  const tipX = originX + dirX * length * flicker;
-  const tipY = originY + dirY * length * flicker;
-
-  ctx.save();
-
-  // Rook achter de vlam.
-  for (let i = 0; i < 5; i++) {
-    const p = ((now * 0.0014) + i / 5) % 1;
-    const px = originX + dirX * length * (0.55 + p * 1.05);
-    const py = originY + dirY * length * (0.55 + p * 1.05);
-    const wobble = Math.sin(now * 0.004 + i * 1.7) * width * 0.18;
-    ctx.globalAlpha = 0.18 * (1 - p);
-    ctx.fillStyle = "#d8e0e8";
-    ctx.beginPath();
-    ctx.ellipse(
-      px + normalX * wobble,
-      py + normalY * wobble,
-      width * (0.18 + p * 0.20),
-      width * (0.12 + p * 0.18),
-      angle,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
+    wrap.append(row, input);
+    controlsEl.appendChild(wrap);
+    return { key, input, value };
   }
 
-  ctx.globalAlpha = 1;
+  const sliderRefs = sliders.map(makeSlider);
 
-  // Buitenste vuur.
-  const outer = ctx.createLinearGradient(originX, originY, tipX, tipY);
-  outer.addColorStop(0, "rgba(255,255,210,0.95)");
-  outer.addColorStop(0.35, "rgba(255,185,35,0.88)");
-  outer.addColorStop(0.7, "rgba(255,70,0,0.58)");
-  outer.addColorStop(1, "rgba(255,40,0,0)");
-  ctx.fillStyle = outer;
-  ctx.beginPath();
-  ctx.moveTo(originX + normalX * width * 0.38, originY + normalY * width * 0.38);
-  ctx.quadraticCurveTo(originX + dirX * length * 0.38 + normalX * width * 0.72, originY + dirY * length * 0.38 + normalY * width * 0.72, tipX, tipY);
-  ctx.quadraticCurveTo(originX + dirX * length * 0.38 - normalX * width * 0.72, originY + dirY * length * 0.38 - normalY * width * 0.72, originX - normalX * width * 0.38, originY - normalY * width * 0.38);
-  ctx.closePath();
-  ctx.fill();
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * dpr);
+    canvas.height = Math.round(innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }
 
-  // Binnenste vuur.
-  const innerTipX = originX + dirX * length * 0.68 * flicker;
-  const innerTipY = originY + dirY * length * 0.68 * flicker;
-  const inner = ctx.createLinearGradient(originX, originY, innerTipX, innerTipY);
-  inner.addColorStop(0, "rgba(255,255,245,1)");
-  inner.addColorStop(0.45, "rgba(255,232,130,0.95)");
-  inner.addColorStop(1, "rgba(255,120,0,0)");
-  ctx.fillStyle = inner;
-  ctx.beginPath();
-  ctx.moveTo(originX + normalX * width * 0.18, originY + normalY * width * 0.18);
-  ctx.quadraticCurveTo(originX + dirX * length * 0.26 + normalX * width * 0.34, originY + dirY * length * 0.26 + normalY * width * 0.34, innerTipX, innerTipY);
-  ctx.quadraticCurveTo(originX + dirX * length * 0.26 - normalX * width * 0.34, originY + dirY * length * 0.26 - normalY * width * 0.34, originX - normalX * width * 0.18, originY - normalY * width * 0.18);
-  ctx.closePath();
-  ctx.fill();
+  function drawStars() {
+    ctx.save();
+    for (let i = 0; i < 46; i++) {
+      const x = ((i * 173) % 1000) / 1000 * innerWidth;
+      const y = ((i * 311) % 1000) / 1000 * innerHeight;
+      const tw = 0.35 + Math.sin(time * 2 + i) * 0.25;
+      ctx.globalAlpha = 0.28 + tw * 0.4;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x, y, 1.2 + (i % 3) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
-  // Motor-gloed, handig om te zien waar het vuur begint.
-  ctx.fillStyle = "rgba(255,245,180,0.92)";
-  ctx.beginPath();
-  ctx.ellipse(originX, originY, width * 0.14, width * 0.09, angle, 0, Math.PI * 2);
-  ctx.fill();
+  function drawFlameAndSmoke(flicker) {
+    const angle = config.flameAngle * Math.PI / 180;
+    const len = config.flameLength * (0.88 + Math.sin(flicker * 18) * 0.08 + Math.sin(flicker * 31) * 0.05);
+    const width = config.flameWidth;
 
-  ctx.restore();
-}
+    ctx.save();
+    ctx.translate(config.smokeX, config.smokeY);
+    ctx.rotate(angle);
+    for (let i = 0; i < 5; i++) {
+      const t = (flicker * 0.85 + i / 5) % 1;
+      const px = -len * (0.25 + t * 1.1);
+      const py = Math.sin(flicker * 8 + i * 1.7) * width * 0.18;
+      ctx.globalAlpha = 0.24 * (1 - t);
+      ctx.fillStyle = '#dbe2ea';
+      ctx.beginPath();
+      ctx.ellipse(px, py, width * (0.18 + t * 0.20), width * (0.14 + t * 0.18), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
 
-function drawRocket(now) {
-  if (!rocket.complete || !rocket.naturalWidth) return;
+    ctx.save();
+    ctx.translate(config.flameX, config.flameY);
+    ctx.rotate(angle);
 
-  const size = num("rocketSize");
-  const scale = size / Math.max(rocket.width, rocket.height);
-  const drawW = rocket.width * scale;
-  const drawH = rocket.height * scale;
+    const outer = ctx.createLinearGradient(-len, 0, 8, 0);
+    outer.addColorStop(0, 'rgba(255, 80, 0, 0)');
+    outer.addColorStop(0.25, 'rgba(255, 100, 0, 0.45)');
+    outer.addColorStop(0.60, 'rgba(255, 172, 24, 0.86)');
+    outer.addColorStop(1, 'rgba(255, 235, 160, 0.18)');
+    ctx.fillStyle = outer;
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.quadraticCurveTo(-len * 0.35, -width, -len, 0);
+    ctx.quadraticCurveTo(-len * 0.35, width, 8, 0);
+    ctx.closePath();
+    ctx.fill();
 
-  const loopSeconds = 5.2;
-  const p = ((now - t0) / 1000 / loopSeconds) % 1;
-  const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    const innerLen = len * 0.56;
+    const inner = ctx.createLinearGradient(-innerLen, 0, 6, 0);
+    inner.addColorStop(0, 'rgba(255, 150, 0, 0)');
+    inner.addColorStop(0.45, 'rgba(255, 235, 100, 0.95)');
+    inner.addColorStop(1, 'rgba(255, 255, 235, 0.6)');
+    ctx.fillStyle = inner;
+    ctx.beginPath();
+    ctx.moveTo(6, 0);
+    ctx.quadraticCurveTo(-innerLen * 0.35, -width * 0.45, -innerLen, 0);
+    ctx.quadraticCurveTo(-innerLen * 0.35, width * 0.45, 6, 0);
+    ctx.closePath();
+    ctx.fill();
 
-  const margin = size * 0.9;
-  const left = -margin;
-  const right = w + margin;
-  const x = direction === 1 ? left + (right - left) * eased : right - (right - left) * eased;
-  const y = h * 0.37 + Math.sin(now * 0.0018) * h * 0.09;
-  const routeRotation = direction === 1 ? Math.PI / 2 : -Math.PI / 2;
+    ctx.restore();
+  }
 
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(routeRotation);
+  function drawGuide() {
+    if (!showGuide) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-180, 0);
+    ctx.lineTo(180, 0);
+    ctx.moveTo(0, -180);
+    ctx.lineTo(0, 210);
+    ctx.stroke();
 
-  // Het vuur wordt vóór de raket getekend, zodat het onder de raket valt.
-  drawFlame(drawW, drawH, now);
+    ctx.fillStyle = '#5ff';
+    ctx.beginPath();
+    ctx.arc(config.flameX, config.flameY, 5, 0, Math.PI * 2);
+    ctx.fill();
 
-  ctx.drawImage(rocket, -drawW / 2, -drawH / 2, drawW, drawH);
-  ctx.restore();
-}
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Arial';
+    ctx.fillText('vuurpunt', config.flameX + 8, config.flameY - 8);
+    ctx.fillText('motorgebied', -33, 84);
+    ctx.strokeStyle = 'rgba(255,255,0,0.85)';
+    ctx.strokeRect(-36, 72, 72, 42);
+    ctx.restore();
+  }
 
-function frame(now) {
-  drawSky(now);
-  drawRocket(now);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+  function drawRocketGroup(x, y, rotation) {
+    if (!img.complete || !img.width) return;
+
+    const scale = config.rocketSize / Math.max(img.width, img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+
+    drawFlameAndSmoke(time);
+    drawGuide();
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+
+    ctx.restore();
+  }
+
+  function updateValues() {
+    valuesEl.textContent = JSON.stringify(config);
+  }
+
+  function reset() {
+    Object.assign(config, defaults);
+    sliderRefs.forEach(({ key, input, value }) => {
+      input.value = config[key];
+      value.textContent = config[key];
+    });
+    updateValues();
+  }
+
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('toggleGuide').addEventListener('click', (e) => {
+    showGuide = !showGuide;
+    e.currentTarget.textContent = showGuide ? 'Hulplijnen uit' : 'Hulplijnen aan';
+  });
+  document.getElementById('copy').addEventListener('click', async () => {
+    const text = JSON.stringify(config, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      valuesEl.textContent = 'Gekopieerd: ' + JSON.stringify(config);
+    } catch {
+      valuesEl.textContent = text;
+    }
+  });
+
+  function loop(ts) {
+    const dt = lastTs ? (ts - lastTs) / 1000 : 0;
+    lastTs = ts;
+    time += dt;
+
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    drawStars();
+
+    const cycle = config.speed;
+    const p = ((time / cycle) % 1);
+    const x = -config.rocketSize + p * (innerWidth + config.rocketSize * 2);
+    const y = innerHeight * 0.44 + Math.sin(p * Math.PI * 2) * innerHeight * 0.10;
+
+    const dx = innerWidth + config.rocketSize * 2;
+    const dy = Math.cos(p * Math.PI * 2) * Math.PI * 2 * innerHeight * 0.10;
+    const flightAngle = Math.atan2(dy, dx);
+
+    drawRocketGroup(x, y, flightAngle + Math.PI / 2);
+    requestAnimationFrame(loop);
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  updateValues();
+  requestAnimationFrame(loop);
+})();
 </script>
 </body>
 </html>
