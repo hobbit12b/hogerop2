@@ -320,11 +320,11 @@ const MOON_SCORE = 8;
 const SATELLITE_SCORE = 14;
 const SPACE_RANDOM_START_SCORE = 20;
 const SPACE_RANDOM_INTERVAL = 6;
-const FLYBY_VISIBILITY_START_SCORE = 8;
+const FLYBY_VISIBILITY_START_SCORE = 0;
 const FLYBY_VISIBILITY_SCORE_RANGE = 1;
-const ROCKET_FLYBY_START_SCORE = 8;
-const ROCKET_FLYBY_FIRST_TICK_MIN = 180;
-const ROCKET_FLYBY_FIRST_TICK_MAX = 480;
+const ROCKET_FLYBY_START_SCORE = 3;
+const ROCKET_FLYBY_FIRST_TICK_MIN = 60;
+const ROCKET_FLYBY_FIRST_TICK_MAX = 120;
 const ROCKET_FLYBY_TICK_MIN = 1200;
 const ROCKET_FLYBY_TICK_MAX = 3000;
 /* Raketvuur gebruikt dezelfde lokale pixelcoördinaten als raket-only-flight-test.html. */
@@ -336,9 +336,9 @@ const ROCKET_FLAME_LENGTH = 78;
 const ROCKET_FLAME_WIDTH = 36;
 const ROCKET_SMOKE_X = 0;
 const ROCKET_SMOKE_Y = 126;
-const METEOR_FLYBY_START_SCORE = 10;
-const METEOR_FLYBY_CHANCE = 0.18;
-const METEOR_FLYBY_COOLDOWN = 5;
+const METEOR_FLYBY_START_SCORE = 6;
+const METEOR_FLYBY_CHANCE = 1;
+const METEOR_FLYBY_COOLDOWN = 6;
 const METEOR_SMOKE_PUFFS = 8;
 const METEOR_SMOKE_LENGTH = 1.28;
 const FIXED_SPACE_SCORE_EVENTS = Object.freeze({
@@ -1595,24 +1595,15 @@ function App() {
                 const wobble = Math.sin(tick * 0.09 + i * 1.63) * baseRadius * (0.28 + t * 0.45);
                 const puffX = x - dirX * distance + normalX * wobble;
                 const puffY = y - dirY * distance + normalY * wobble;
-                const radius = baseRadius * (1.08 - t * 0.46) * (0.92 + Math.sin(tick * 0.11 + i) * 0.06);
-                const puffAlpha = alpha * (0.30 - t * 0.16);
+                const radiusX = baseRadius * (0.44 + t * 1.10);
+                const radiusY = baseRadius * (0.30 + t * 0.78);
+                const puffAlpha = alpha * 0.30 * (1 - t) * (0.72 + Math.sin(tick * 0.05 + i) * 0.12);
 
-                const grad = ctx.createRadialGradient(
-                    puffX - dirX * radius * 0.15,
-                    puffY - dirY * radius * 0.15,
-                    radius * 0.12,
-                    puffX,
-                    puffY,
-                    radius
-                );
-                grad.addColorStop(0, `rgba(255, 245, 235, ${puffAlpha})`);
-                grad.addColorStop(0.45, `rgba(205, 185, 170, ${puffAlpha * 0.72})`);
-                grad.addColorStop(1, 'rgba(80, 70, 65, 0)');
-
-                ctx.fillStyle = grad;
+                if (puffAlpha <= 0.01) continue;
+                ctx.globalAlpha = puffAlpha;
+                ctx.fillStyle = "#d7d2c8";
                 ctx.beginPath();
-                ctx.arc(puffX, puffY, radius, 0, Math.PI * 2);
+                ctx.ellipse(puffX, puffY, radiusX, radiusY, Math.atan2(dirY, dirX), 0, Math.PI * 2);
                 ctx.fill();
             }
 
@@ -2002,19 +1993,18 @@ function App() {
         };
 
         const spawnRocketFlyby = (s) => {
-            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
-            const hasRocketInFlight = activeRocketFlybys.some((obj) => obj && obj.type === "rocket");
+            const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
+            const activeMeteors = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const hasMeteorInFlight = activeMeteors.some((obj) => obj && obj.type === "meteor");
             if (hasRocketInFlight) return;
-
-            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
-            const hasMeteorInFlight = activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasMeteorInFlight) {
-                s.deco.nextRocketFlybyTick = s.time.tick + 120;
+                scheduleNextRocketFlyby(s, false);
                 return;
             }
 
             s.deco.activeRocketFlybys = [
-                ...activeRocketFlybys,
+                ...activeFlybys,
                 createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)
             ];
             scheduleNextRocketFlyby(s, false);
@@ -2042,16 +2032,14 @@ function App() {
             if ((s.score - (s.deco.lastMeteorScore ?? -999)) < METEOR_FLYBY_COOLDOWN) return;
             if (Math.random() > METEOR_FLYBY_CHANCE) return;
 
-            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
-            const hasMeteorInFlight = activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
-            if (hasMeteorInFlight) return;
-
-            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
-            const hasRocketInFlight = activeRocketFlybys.some((obj) => obj && obj.type === "rocket");
-            if (hasRocketInFlight) return;
+            const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
+            const activeRockets = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            const hasRocketInFlight = activeRockets.some((obj) => obj && obj.type === "rocket");
+            if (hasMeteorInFlight || hasRocketInFlight) return;
 
             s.deco.activeMeteorFlybys = [
-                ...activeMeteorFlybys,
+                ...activeFlybys,
                 createSpaceObjectInstance("meteor", s.time.tick, getCurrentClimb(s), s.score)
             ];
             s.deco.lastMeteorScore = s.score;
