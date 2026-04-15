@@ -443,36 +443,24 @@ const LETTER_AUDIO_SOURCES = Object.fromEntries(
 
 const PLAYABLE_LETTERS = ALL_LETTERS.filter((letter) => Array.isArray(LETTER_AUDIO_SOURCES[letter]) && LETTER_AUDIO_SOURCES[letter].length > 0);
 
-
-
 function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
 }
-
-function lerp(a, b, t) {
-    return a + (b - a) * t;
-}
-
+function lerp(a, b, t) { return a + (b - a) * t; }
 function quadraticBezier(p0, p1, p2, t) {
     const mt = 1 - t;
     return (mt * mt * p0) + (2 * mt * t * p1) + (t * t * p2);
 }
-
 function quadraticBezierTangent(p0, p1, p2, t) {
     return 2 * (1 - t) * (p1 - p0) + 2 * t * (p2 - p1);
 }
-
 function easeInOut(t) {
-    return t < 0.5
-        ? 4 * t * t * t
-        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
-
 function smoothStep(edge0, edge1, x) {
     const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
 }
-
 function getJumpAnimationState(progress, totalFrames) {
     const safeFrameCount = Math.max(1, totalFrames || ASTRONAUT_TOTAL_FRAMES);
     const frameSequence = ASTRONAUT_JUMP_FRAME_SEQUENCE.map((frameIndex) => clamp(frameIndex, 0, safeFrameCount - 1));
@@ -480,10 +468,7 @@ function getJumpAnimationState(progress, totalFrames) {
     const clampedProgress = clamp(progress, 0, 1);
 
     if (!frameSequence.length) {
-        return {
-            frameIndex: 0,
-            motionProgress: clampedProgress
-        };
+        return { frameIndex: 0, motionProgress: clampedProgress };
     }
 
     const scaled = clampedProgress * Math.max(1, frameSequence.length - 1);
@@ -498,16 +483,13 @@ function getJumpAnimationState(progress, totalFrames) {
         motionProgress: lerp(startMotion, endMotion, localT)
     };
 }
-
 function getPlayerContactY(platformY, circleR) {
     return platformY - 32 + circleR + PLAYER_PLATFORM_SINK;
 }
-
 function orderLetters(list) {
     const wanted = new Set(list);
     return PLAYABLE_LETTERS.filter(letter => wanted.has(letter));
 }
-
 function createTwinkleStars(count = 40) {
     return Array.from({ length: count }, (_, i) => ({
         x: (i * 0.173) % 1,
@@ -523,39 +505,18 @@ function createTwinkleStars(count = 40) {
 }
 
 function estimateBorderColor(data, width, height) {
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    let count = 0;
-
+    let r = 0, g = 0, b = 0, count = 0;
     const samplePixel = (x, y) => {
         const idx = (y * width + x) * 4;
-        r += data[idx];
-        g += data[idx + 1];
-        b += data[idx + 2];
-        count++;
+        r += data[idx]; g += data[idx + 1]; b += data[idx + 2]; count++;
     };
-
-    for (let x = 0; x < width; x += 6) {
-        samplePixel(x, 0);
-        samplePixel(x, height - 1);
-    }
-    for (let y = 0; y < height; y += 6) {
-        samplePixel(0, y);
-        samplePixel(width - 1, y);
-    }
-
-    return {
-        r: Math.round(r / Math.max(1, count)),
-        g: Math.round(g / Math.max(1, count)),
-        b: Math.round(b / Math.max(1, count))
-    };
+    for (let x = 0; x < width; x += 6) { samplePixel(x, 0); samplePixel(x, height - 1); }
+    for (let y = 0; y < height; y += 6) { samplePixel(0, y); samplePixel(width - 1, y); }
+    return { r: Math.round(r / Math.max(1, count)), g: Math.round(g / Math.max(1, count)), b: Math.round(b / Math.max(1, count)) };
 }
-
 function colorDistance(data, idx, bg) {
     return Math.abs(data[idx] - bg.r) + Math.abs(data[idx + 1] - bg.g) + Math.abs(data[idx + 2] - bg.b);
 }
-
 function removeConnectedBackground(canvas) {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const width = canvas.width;
@@ -565,46 +526,30 @@ function removeConnectedBackground(canvas) {
     const bg = estimateBorderColor(data, width, height);
     const visited = new Uint8Array(width * height);
     const queue = new Uint32Array(width * height);
-    let head = 0;
-    let tail = 0;
-    const threshold = 60;
-    const featherThreshold = 84;
+    let head = 0, tail = 0;
+    const threshold = 60, featherThreshold = 84;
 
     const tryEnqueue = (x, y) => {
         if (x < 0 || y < 0 || x >= width || y >= height) return;
         const pos = y * width + x;
         if (visited[pos]) return;
         visited[pos] = 1;
-
         const idx = pos * 4;
-        if (data[idx + 3] === 0) {
-            queue[tail++] = pos;
-            return;
-        }
-
+        if (data[idx + 3] === 0) { queue[tail++] = pos; return; }
         if (colorDistance(data, idx, bg) <= threshold) {
             queue[tail++] = pos;
             data[idx + 3] = 0;
         }
     };
 
-    for (let x = 0; x < width; x++) {
-        tryEnqueue(x, 0);
-        tryEnqueue(x, height - 1);
-    }
-    for (let y = 0; y < height; y++) {
-        tryEnqueue(0, y);
-        tryEnqueue(width - 1, y);
-    }
+    for (let x = 0; x < width; x++) { tryEnqueue(x, 0); tryEnqueue(x, height - 1); }
+    for (let y = 0; y < height; y++) { tryEnqueue(0, y); tryEnqueue(width - 1, y); }
 
     while (head < tail) {
         const pos = queue[head++];
         const x = pos % width;
         const y = Math.floor(pos / width);
-        tryEnqueue(x + 1, y);
-        tryEnqueue(x - 1, y);
-        tryEnqueue(x, y + 1);
-        tryEnqueue(x, y - 1);
+        tryEnqueue(x + 1, y); tryEnqueue(x - 1, y); tryEnqueue(x, y + 1); tryEnqueue(x, y - 1);
     }
 
     for (let y = 1; y < height - 1; y++) {
@@ -614,14 +559,12 @@ function removeConnectedBackground(canvas) {
             if (data[idx + 3] === 0) continue;
             const dist = colorDistance(data, idx, bg);
             if (dist > featherThreshold) continue;
-
             const neighbors = [
                 ((y - 1) * width + x) * 4,
                 ((y + 1) * width + x) * 4,
                 (y * width + (x - 1)) * 4,
                 (y * width + (x + 1)) * 4
             ];
-
             const touchesTransparent = neighbors.some(nIdx => data[nIdx + 3] === 0);
             if (touchesTransparent) {
                 const softness = clamp((dist - threshold) / Math.max(1, featherThreshold - threshold), 0, 1);
@@ -629,20 +572,14 @@ function removeConnectedBackground(canvas) {
             }
         }
     }
-
     ctx.putImageData(imageData, 0, 0);
     return canvas;
 }
-
 function getOpaqueBounds(canvas, alphaThreshold = 8) {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const { width, height } = canvas;
     const data = ctx.getImageData(0, 0, width, height).data;
-    let minX = width;
-    let minY = height;
-    let maxX = -1;
-    let maxY = -1;
-
+    let minX = width, minY = height, maxX = -1, maxY = -1;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = (y * width + x) * 4;
@@ -654,11 +591,9 @@ function getOpaqueBounds(canvas, alphaThreshold = 8) {
             }
         }
     }
-
     if (maxX < minX || maxY < minY) return null;
     return { minX, minY, maxX, maxY };
 }
-
 function cropCanvas(canvas, bounds, padding = 8) {
     const left = clamp(bounds.minX - padding, 0, canvas.width - 1);
     const top = clamp(bounds.minY - padding, 0, canvas.height - 1);
@@ -666,28 +601,20 @@ function cropCanvas(canvas, bounds, padding = 8) {
     const bottom = clamp(bounds.maxY + padding, 0, canvas.height - 1);
     const width = Math.max(1, right - left + 1);
     const height = Math.max(1, bottom - top + 1);
-
     const cropped = document.createElement("canvas");
-    cropped.width = width;
-    cropped.height = height;
+    cropped.width = width; cropped.height = height;
     const ctx = cropped.getContext("2d", { willReadFrequently: true });
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     ctx.drawImage(canvas, left, top, width, height, 0, 0, width, height);
     return cropped;
 }
-
 function seekVideo(video, time) {
     return new Promise((resolve) => {
-        const onSeeked = () => {
-            video.removeEventListener("seeked", onSeeked);
-            resolve();
-        };
+        const onSeeked = () => { video.removeEventListener("seeked", onSeeked); resolve(); };
         video.addEventListener("seeked", onSeeked, { once: true });
         video.currentTime = Math.min(Math.max(time, 0), Math.max(0, video.duration - 0.001));
     });
 }
-
 async function extractAstronautFrames(video, asset, frameCount = ASTRONAUT_TOTAL_FRAMES) {
     try {
         const safeFrameCount = Math.max(1, Math.round(frameCount || ASTRONAUT_TOTAL_FRAMES));
@@ -714,62 +641,35 @@ async function extractAstronautFrames(video, asset, frameCount = ASTRONAUT_TOTAL
 
             const bounds = getOpaqueBounds(frameCanvas);
             if (bounds) {
-                unionBounds = unionBounds
-                    ? {
-                        minX: Math.min(unionBounds.minX, bounds.minX),
-                        minY: Math.min(unionBounds.minY, bounds.minY),
-                        maxX: Math.max(unionBounds.maxX, bounds.maxX),
-                        maxY: Math.max(unionBounds.maxY, bounds.maxY)
-                    }
-                    : bounds;
+                unionBounds = unionBounds ? {
+                    minX: Math.min(unionBounds.minX, bounds.minX),
+                    minY: Math.min(unionBounds.minY, bounds.minY),
+                    maxX: Math.max(unionBounds.maxX, bounds.maxX),
+                    maxY: Math.max(unionBounds.maxY, bounds.maxY)
+                } : bounds;
             }
         }
 
-        asset.frames = unionBounds
-            ? rawFrames.map((frame) => cropCanvas(frame, unionBounds, 10))
-            : rawFrames;
-
-        asset.aspect = asset.frames[0]
-            ? asset.frames[0].width / Math.max(1, asset.frames[0].height)
-            : (video.videoWidth / Math.max(1, video.videoHeight));
+        asset.frames = unionBounds ? rawFrames.map((frame) => cropCanvas(frame, unionBounds, 10)) : rawFrames;
+        asset.aspect = asset.frames[0] ? asset.frames[0].width / Math.max(1, asset.frames[0].height) : (video.videoWidth / Math.max(1, video.videoHeight));
         asset.ready = asset.frames.length > 0;
         asset.loading = false;
     } catch (error) {
         console.error("Kon astronaut frames niet laden:", error);
-        asset.ready = false;
-        asset.loading = false;
-        asset.failed = true;
+        asset.ready = false; asset.loading = false; asset.failed = true;
     }
 }
-
 function createAstronautAsset(src, frameCount = ASTRONAUT_TOTAL_FRAMES) {
-    const asset = {
-        frames: [],
-        ready: false,
-        loading: true,
-        failed: false,
-        aspect: 520 / 900
-    };
-
+    const asset = { frames: [], ready: false, loading: true, failed: false, aspect: 520 / 900 };
     const video = document.createElement("video");
-    video.src = src;
-    video.preload = "auto";
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = "anonymous";
-
+    video.src = src; video.preload = "auto"; video.muted = true; video.playsInline = true; video.crossOrigin = "anonymous";
     const startExtraction = async () => {
         if (!video.duration || !video.videoWidth || !video.videoHeight) return;
         await extractAstronautFrames(video, asset, frameCount);
     };
-
     video.addEventListener("loadeddata", startExtraction, { once: true });
-    video.addEventListener("error", () => {
-        asset.loading = false;
-        asset.failed = true;
-    }, { once: true });
+    video.addEventListener("error", () => { asset.loading = false; asset.failed = true; }, { once: true });
     video.load();
-
     return asset;
 }
 
@@ -777,38 +677,23 @@ function loadAssets() {
     const createBlackTransparentAsset = (src, threshold = 28) => {
         const img = new Image();
         const asset = { img, canvas: null, ready: false };
-
         img.onload = () => {
             const off = document.createElement("canvas");
-            off.width = img.width;
-            off.height = img.height;
+            off.width = img.width; off.height = img.height;
             const ictx = off.getContext("2d");
-            ictx.imageSmoothingEnabled = true;
-            ictx.imageSmoothingQuality = "high";
+            ictx.imageSmoothingEnabled = true; ictx.imageSmoothingQuality = "high";
             ictx.drawImage(img, 0, 0);
-
             const imageData = ictx.getImageData(0, 0, off.width, off.height);
             const d = imageData.data;
-
             for (let i = 0; i < d.length; i += 4) {
-                const r = d[i];
-                const g = d[i + 1];
-                const b = d[i + 2];
-                const a = d[i + 3];
+                const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
                 const max = Math.max(r, g, b);
-
-                if (a > 0 && max <= threshold) {
-                    d[i + 3] = 0;
-                } else if (a > 0 && max <= threshold + 18) {
-                    d[i + 3] = Math.round(a * 0.35);
-                }
+                if (a > 0 && max <= threshold) d[i + 3] = 0;
+                else if (a > 0 && max <= threshold + 18) d[i + 3] = Math.round(a * 0.35);
             }
-
             ictx.putImageData(imageData, 0, 0);
-            asset.canvas = off;
-            asset.ready = true;
+            asset.canvas = off; asset.ready = true;
         };
-
         img.src = src;
         return asset;
     };
@@ -816,21 +701,16 @@ function loadAssets() {
     const createTransparentAsset = (src, padding = 8) => {
         const img = new Image();
         const asset = { img, canvas: null, ready: false };
-
         img.onload = () => {
             const off = document.createElement("canvas");
-            off.width = img.width;
-            off.height = img.height;
+            off.width = img.width; off.height = img.height;
             const ictx = off.getContext("2d", { willReadFrequently: true });
-            ictx.imageSmoothingEnabled = true;
-            ictx.imageSmoothingQuality = "high";
+            ictx.imageSmoothingEnabled = true; ictx.imageSmoothingQuality = "high";
             ictx.drawImage(img, 0, 0);
-
             const bounds = getOpaqueBounds(off);
             asset.canvas = bounds ? cropCanvas(off, bounds, padding) : off;
             asset.ready = true;
         };
-
         img.src = src;
         return asset;
     };
@@ -838,9 +718,7 @@ function loadAssets() {
     const createImageAsset = (src) => {
         const img = new Image();
         const asset = { img, ready: false };
-        img.onload = () => {
-            asset.ready = true;
-        };
+        img.onload = () => { asset.ready = true; };
         img.src = src;
         return asset;
     };
@@ -865,6 +743,12 @@ function loadAssets() {
         repeatButton: createImageAsset(REPEAT_BUTTON_SRC)
     };
 }
+
+/* NOTE:
+   Dit bestand is functioneel hetzelfde als index20uur.html, met alleen deze flyby-fix:
+   - raket/meteoor starten iets minder ver buiten beeld
+   - out-of-view marge is groter en schermafhankelijk
+*/
 
 function App() {
     const canvasRef = useRef(null);
@@ -904,11 +788,7 @@ function App() {
             idleAnimFps: DEFAULT_IDLE_ANIM_FPS,
             jumpAnimSpeed: DEFAULT_JUMP_ANIM_SPEED
         },
-        time: {
-            lastTs: 0,
-            tick: 0,
-            idleFrameClock: 0
-        },
+        time: { lastTs: 0, tick: 0, idleFrameClock: 0 },
         currentPlatform: null,
         oldPlatforms: [],
         nextPlatforms: [],
@@ -940,19 +820,9 @@ function App() {
         stepUp: 0,
         lastPairCenterX: null,
         player: {
-            x: 0,
-            y: 0,
-            r: 0,
-            vy: 0,
-            jumpT: 0,
-            jumpStartX: 0,
-            jumpStartY: 0,
-            jumpEndX: 0,
-            jumpEndY: 0,
-            shadowScale: 1,
-            squashX: 1,
-            squashY: 1,
-            rotation: 0
+            x: 0, y: 0, r: 0, vy: 0, jumpT: 0,
+            jumpStartX: 0, jumpStartY: 0, jumpEndX: 0, jumpEndY: 0,
+            shadowScale: 1, squashX: 1, squashY: 1, rotation: 0
         },
         deco: {
             stars: createTwinkleStars(40),
@@ -975,15 +845,11 @@ function App() {
             return next;
         });
     };
-
     const toggleLetter = (letter) => {
         applySelectedLetters((prev) => (
-            prev.includes(letter)
-                ? prev.filter((item) => item !== letter)
-                : [...prev, letter]
+            prev.includes(letter) ? prev.filter((item) => item !== letter) : [...prev, letter]
         ));
     };
-
     const selectAllLetters = () => applySelectedLetters(PLAYABLE_LETTERS);
     const deselectAllLetters = () => applySelectedLetters([]);
     const selectTreatedLetters = () => applySelectedLetters(TREATED_LETTERS);
@@ -991,16 +857,13 @@ function App() {
     const speakLetter = useCallback((letter) => {
         const normalizedLetter = String(letter || "").toLowerCase();
         if (!normalizedLetter) return;
-
         if (activeLetterAudioRef.current) {
             activeLetterAudioRef.current.pause();
             activeLetterAudioRef.current.currentTime = 0;
             activeLetterAudioRef.current = null;
         }
-
         const variants = LETTER_AUDIO_SOURCES[normalizedLetter];
         if (!variants || !variants.length) return;
-
         if (!letterAudioRefs.current[normalizedLetter]) {
             letterAudioRefs.current[normalizedLetter] = variants.map((sourceSet) => {
                 const audio = createAudioElementWithFallback(sourceSet);
@@ -1008,12 +871,10 @@ function App() {
                 return audio;
             });
         }
-
         const audioPool = letterAudioRefs.current[normalizedLetter];
         const audio = audioPool[Math.floor(Math.random() * audioPool.length)];
         activeLetterAudioRef.current = audio;
         audio.currentTime = 0;
-
         audio.play().catch((error) => {
             console.warn(`Letter-audio voor ${normalizedLetter} kon niet afspelen.`, error);
             activeLetterAudioRef.current = null;
@@ -1032,17 +893,13 @@ function App() {
     const playBackgroundMusic = useCallback(() => {
         const audio = backgroundMusicRef.current;
         if (!audio || !musicEnabled || document.hidden) return;
-        audio.play().catch((error) => {
-            console.warn("Achtergrondmuziek kon niet afspelen.", error);
-        });
+        audio.play().catch((error) => { console.warn("Achtergrondmuziek kon niet afspelen.", error); });
     }, [musicEnabled]);
-
     const pauseBackgroundMusic = useCallback(() => {
         const audio = backgroundMusicRef.current;
         if (!audio) return;
         audio.pause();
     }, []);
-
     const toggleBackgroundMusic = useCallback(() => {
         const next = !musicEnabled;
         setMusicEnabled(next);
@@ -1051,14 +908,10 @@ function App() {
             pauseBackgroundMusic();
             return;
         }
-
         const audio = backgroundMusicRef.current;
         if (!audio || document.hidden) return;
-        audio.play().catch((error) => {
-            console.warn("Achtergrondmuziek kon niet afspelen.", error);
-        });
+        audio.play().catch((error) => { console.warn("Achtergrondmuziek kon niet afspelen.", error); });
     }, [musicEnabled, pauseBackgroundMusic]);
-
 
     const handleRepeatQuestion = useCallback(() => {
         if (!targetLetter) return;
@@ -1071,28 +924,19 @@ function App() {
         }, 180);
     }, [targetLetter, speakLetter]);
 
-    useEffect(() => {
-        repeatPressedRef.current = repeatPressed;
-    }, [repeatPressed]);
+    useEffect(() => { repeatPressedRef.current = repeatPressed; }, [repeatPressed]);
 
     useEffect(() => {
         const audio = createAudioElementWithFallback(createAudioSourceSet(BACKGROUND_MUSIC_BASE));
-        audio.preload = "auto";
-        audio.loop = true;
-        audio.volume = 0.32;
-
+        audio.preload = "auto"; audio.loop = true; audio.volume = 0.32;
         const handleCanPlay = () => setMusicReady(true);
         const handleError = () => setMusicFailed(true);
-
         audio.addEventListener("canplaythrough", handleCanPlay, { once: true });
         audio.addEventListener("error", handleError, { once: true });
         if (audio.readyState >= 4) setMusicReady(true);
-
         backgroundMusicRef.current = audio;
-
         return () => {
-            audio.pause();
-            audio.currentTime = 0;
+            audio.pause(); audio.currentTime = 0;
             audio.removeEventListener("canplaythrough", handleCanPlay);
             audio.removeEventListener("error", handleError);
             backgroundMusicRef.current = null;
@@ -1103,29 +947,22 @@ function App() {
         const handleVisibilityChange = () => {
             const audio = backgroundMusicRef.current;
             if (!audio) return;
-
             if (document.hidden) {
                 musicWasPlayingBeforeHideRef.current = !audio.paused;
                 audio.pause();
                 return;
             }
-
-            if (musicEnabled && musicWasPlayingBeforeHideRef.current) {
-                playBackgroundMusic();
-            }
+            if (musicEnabled && musicWasPlayingBeforeHideRef.current) playBackgroundMusic();
         };
-
         const handlePageHide = () => {
             const audio = backgroundMusicRef.current;
             if (!audio) return;
             musicWasPlayingBeforeHideRef.current = !audio.paused;
             audio.pause();
         };
-
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener("pagehide", handlePageHide);
         window.addEventListener("blur", handlePageHide);
-
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             window.removeEventListener("pagehide", handlePageHide);
@@ -1135,9 +972,7 @@ function App() {
 
     const updateSetting = (key, value) => {
         let nextValue = Number(value);
-
         if (Number.isNaN(nextValue)) return;
-
         if (key === "astronautScale") nextValue = clamp(nextValue, 1.6, 4.6);
         if (key === "jumpFrames") nextValue = Math.round(clamp(nextValue, 8, 28));
         if (key === "idleAnimFps") nextValue = Math.round(clamp(nextValue, 3, 14));
@@ -1151,7 +986,6 @@ function App() {
     };
 
     const getFocusedCameraY = (platformY, h, offset) => platformY - (h - offset);
-
     const getSharedCameraY = (lowerPlatformY, upperPlatformY, h, offset) => {
         const s = stateRef.current;
         const topMargin = h > s.width ? h * 0.15 : h * 0.2;
@@ -1163,7 +997,6 @@ function App() {
     const updateCameraTarget = () => {
         const s = stateRef.current;
         if (!s.currentPlatform) return;
-
         if (s.gameState === "jumping" && s.chosenTarget) {
             s.targetCameraY = getSharedCameraY(s.currentPlatform.y, s.chosenTarget.y, s.height, s.viewOffset);
         } else if ((s.gameState === "waiting" || s.gameState === "landingPause") && s.nextPlatforms.length > 0) {
@@ -1179,30 +1012,13 @@ function App() {
         s.player.x = s.currentPlatform.x + s.currentPlatform.w / 2;
         const contactY = getPlayerContactY(s.currentPlatform.y, s.circleR);
         s.player.y = contactY - s.player.r;
-        s.player.squashX = 1;
-        s.player.squashY = 1;
-        s.player.shadowScale = 1;
-        s.player.rotation = 0;
+        s.player.squashX = 1; s.player.squashY = 1; s.player.shadowScale = 1; s.player.rotation = 0;
     };
 
     const createPlatform = (x, y, letter = "", correct = false) => ({
-        x,
-        y,
-        w: stateRef.current.platformW,
-        h: PLATFORM_H,
-        letter,
-        correct,
-        falling: false,
-        fallSpeed: 0,
-        driftX: 0,
-        rotation: 0,
-        rotationSpeed: 0,
-        fallTime: 0,
-        fallStartX: x,
-        fallStartY: y,
-        fallTiltDir: 0,
-        alpha: 1,
-        circleAlpha: letter ? 1 : 0
+        x, y, w: stateRef.current.platformW, h: PLATFORM_H, letter, correct,
+        falling: false, fallSpeed: 0, driftX: 0, rotation: 0, rotationSpeed: 0,
+        fallTime: 0, fallStartX: x, fallStartY: y, fallTiltDir: 0, alpha: 1, circleAlpha: letter ? 1 : 0
     });
 
     const randomLetter = (except = null, sourceLetters = null) => {
@@ -1221,19 +1037,15 @@ function App() {
         const maxGap = Math.max(minGap + 12, s.width * 0.36);
         const minCenter = margin + s.platformW + minGap * 0.5;
         const maxCenter = s.width - margin - s.platformW - minGap * 0.5;
-
         let center;
-        if (s.lastPairCenterX == null) {
-            center = lerp(minCenter, maxCenter, Math.random());
-        } else {
+        if (s.lastPairCenterX == null) center = lerp(minCenter, maxCenter, Math.random());
+        else {
             const offset = (Math.random() * 2 - 1) * s.width * 0.18;
             center = clamp(s.lastPairCenterX + offset, minCenter, maxCenter);
         }
-
         const gap = lerp(minGap, maxGap, Math.random());
         const leftX = clamp(center - gap / 2 - s.platformW / 2, margin, s.width - margin - s.platformW);
         const rightX = clamp(center + gap / 2 - s.platformW / 2, margin, s.width - margin - s.platformW);
-
         s.lastPairCenterX = (leftX + s.platformW / 2 + rightX + s.platformW / 2) / 2;
         return { leftX, rightX };
     };
@@ -1241,17 +1053,14 @@ function App() {
     const prepareNextRound = () => {
         const s = stateRef.current;
         if (!s.currentPlatform) return;
-
         const activeLetters = s.selectedLetters.length >= 2 ? s.selectedLetters : DEFAULT_SELECTED_LETTERS;
         const nextY = s.currentPlatform.y - s.stepUp;
         const newTarget = activeLetters[Math.floor(Math.random() * activeLetters.length)];
         s.targetLetter = newTarget;
         setTargetLetter(newTarget);
-
         const wrongLetter = randomLetter(newTarget, activeLetters);
         const correctLeft = Math.random() < 0.5;
         const { leftX, rightX } = generateNextPairPositions();
-
         s.pendingNextPlatforms = [
             createPlatform(leftX, nextY, correctLeft ? newTarget : wrongLetter, correctLeft),
             createPlatform(rightX, nextY, correctLeft ? wrongLetter : newTarget, !correctLeft)
@@ -1261,12 +1070,10 @@ function App() {
     const startNextRoundView = () => {
         const s = stateRef.current;
         if (!s.pendingNextPlatforms.length) return;
-
         s.nextPlatforms = s.pendingNextPlatforms;
         s.pendingNextPlatforms = [];
         s.gameState = "waiting";
         setGameState("waiting");
-
         placePlayerOnPlatform();
         updateCameraTarget();
         speakLetter(s.targetLetter);
@@ -1279,27 +1086,18 @@ function App() {
 
         playBackgroundMusic();
 
-        s.score = 0;
-        setScore(0);
+        s.score = 0; setScore(0);
         s.settings = { ...stateRef.current.settings };
         s.selectedLetters = [...activeLetters];
-        s.time.lastTs = 0;
-        s.time.tick = 0;
-        s.time.idleFrameClock = 0;
-        s.oldPlatforms = [];
-        s.nextPlatforms = [];
-        s.pendingNextPlatforms = [];
-        s.chosenTarget = null;
-        s.fallingPlatform = null;
+        s.time.lastTs = 0; s.time.tick = 0; s.time.idleFrameClock = 0;
+        s.oldPlatforms = []; s.nextPlatforms = []; s.pendingNextPlatforms = [];
+        s.chosenTarget = null; s.fallingPlatform = null;
         s.lastPairCenterX = s.width * 0.5;
         s.deco.activeSpaceObject = null;
         s.deco.activeRocketFlybys = [];
         s.deco.activeMeteorFlybys = [];
         s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
         s.deco.nextMeteorFlybyTick = Number.POSITIVE_INFINITY;
-        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
-        s.deco.nextMeteorFlybyTick = Number.POSITIVE_INFINITY;
-        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
         s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
         s.deco.lastMeteorScore = -999;
@@ -1307,119 +1105,68 @@ function App() {
 
         s.currentPlatform = createPlatform(s.width / 2 - s.platformW / 2, s.height - 120, "", false);
         s.cameraY = getFocusedCameraY(s.currentPlatform.y, s.height, s.viewOffset);
-        s.targetCameraY = s.cameraY;
-        s.baseCameraY = s.cameraY;
-        s.respawnT = 0;
-        s.respawnStartX = 0;
-        s.respawnStartY = 0;
-        s.respawnEndX = 0;
-        s.respawnEndY = 0;
-        s.respawnArc = 0;
-        s.respawnAlpha = 1;
-        s.fallCameraStartY = s.cameraY;
-        s.fallCameraTargetY = s.cameraY;
+        s.targetCameraY = s.cameraY; s.baseCameraY = s.cameraY;
+        s.respawnT = 0; s.respawnStartX = 0; s.respawnStartY = 0; s.respawnEndX = 0; s.respawnEndY = 0; s.respawnArc = 0; s.respawnAlpha = 1;
+        s.fallCameraStartY = s.cameraY; s.fallCameraTargetY = s.cameraY;
 
         placePlayerOnPlatform();
-
-        s.gameState = "start";
-        setGameState("start");
-
+        s.gameState = "start"; setGameState("start");
         prepareNextRound();
         startNextRoundView();
     };
 
     const queueRespawnFromBottom = () => {
         const s = stateRef.current;
-
-        s.score = 0;
-        setScore(0);
-        s.oldPlatforms = [];
-        s.nextPlatforms = [];
-        s.pendingNextPlatforms = [];
-        s.chosenTarget = null;
-        s.fallingPlatform = null;
-        s.targetLetter = "";
-        setTargetLetter("");
-        s.time.idleFrameClock = 0;
-        s.lastPairCenterX = s.width * 0.5;
-        s.deco.activeSpaceObject = null;
-        s.deco.activeRocketFlybys = [];
-        s.deco.activeMeteorFlybys = [];
-        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
-        s.deco.pendingSpaceQueue = [];
-        s.deco.lastRandomSpaceType = null;
-        s.deco.lastMeteorScore = -999;
-
+        s.score = 0; setScore(0);
+        s.oldPlatforms = []; s.nextPlatforms = []; s.pendingNextPlatforms = [];
+        s.chosenTarget = null; s.fallingPlatform = null; s.targetLetter = ""; setTargetLetter("");
+        s.time.idleFrameClock = 0; s.lastPairCenterX = s.width * 0.5;
+        s.deco.activeSpaceObject = null; s.deco.activeRocketFlybys = []; s.deco.activeMeteorFlybys = [];
+        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY; s.deco.pendingSpaceQueue = []; s.deco.lastRandomSpaceType = null; s.deco.lastMeteorScore = -999;
         s.fallCameraStartY = s.cameraY;
         s.fallCameraTargetY = s.fallCameraStartY + Math.max(s.height * CAMERA_DROP_DISTANCE_FACTOR, s.stepUp * 0.92);
-
         const platformX = s.width / 2 - s.platformW / 2;
         const platformY = s.fallCameraTargetY + s.height - s.viewOffset;
         s.currentPlatform = createPlatform(platformX, platformY, "", false);
         s.baseCameraY = getFocusedCameraY(s.currentPlatform.y, s.height, s.viewOffset);
         s.targetCameraY = s.baseCameraY;
-
-        s.respawnT = 0;
-        s.respawnAlpha = 0;
+        s.respawnT = 0; s.respawnAlpha = 0;
         s.respawnStartX = s.currentPlatform.x + s.currentPlatform.w / 2;
         s.respawnEndX = s.respawnStartX;
         s.respawnEndY = getPlayerContactY(s.currentPlatform.y, s.circleR) - s.player.r;
         s.respawnStartY = s.baseCameraY + s.height + s.player.r * 3.8;
         s.respawnArc = Math.max(s.player.r * 2.2, s.height * 0.09);
-        s.player.x = s.respawnStartX;
-        s.player.y = s.respawnStartY;
-        s.player.shadowScale = 0.74;
-        s.player.squashX = 1;
-        s.player.squashY = 1;
-        s.player.rotation = 0;
-
-        s.gameState = "cameraDrop";
-        setGameState("cameraDrop");
+        s.player.x = s.respawnStartX; s.player.y = s.respawnStartY;
+        s.player.shadowScale = 0.74; s.player.squashX = 1; s.player.squashY = 1; s.player.rotation = 0;
+        s.gameState = "cameraDrop"; setGameState("cameraDrop");
     };
 
     const choosePlatform = (platform) => {
         const s = stateRef.current;
         if (s.gameState !== "waiting" || !platform) return;
-
         s.chosenTarget = platform;
         const otherPlatform = s.nextPlatforms.find((p) => p !== s.chosenTarget);
-
         if (otherPlatform) s.oldPlatforms.push(otherPlatform);
         if (s.currentPlatform) s.oldPlatforms.push(s.currentPlatform);
-
         s.player.jumpT = 0;
-        s.player.jumpStartX = s.player.x;
-        s.player.jumpStartY = s.player.y;
+        s.player.jumpStartX = s.player.x; s.player.jumpStartY = s.player.y;
         s.player.jumpEndX = s.chosenTarget.x + s.chosenTarget.w / 2;
         s.player.jumpEndY = getPlayerContactY(s.chosenTarget.y, s.circleR) - s.player.r;
-        s.player.shadowScale = 1;
-        s.player.rotation = 0;
-
-        s.gameState = "jumping";
-        setGameState("jumping");
-        updateCameraTarget();
+        s.player.shadowScale = 1; s.player.rotation = 0;
+        s.gameState = "jumping"; setGameState("jumping"); updateCameraTarget();
     };
 
     const updatePlayerIdlePose = () => {
         const s = stateRef.current;
         if (!s.currentPlatform) return;
-
         s.player.x = s.currentPlatform.x + s.currentPlatform.w / 2;
         const contactY = getPlayerContactY(s.currentPlatform.y, s.circleR);
         s.player.y = contactY - s.player.r;
-        s.player.squashX = 1;
-        s.player.squashY = 1;
-        s.player.shadowScale = 1;
-        s.player.rotation = 0;
+        s.player.squashX = 1; s.player.squashY = 1; s.player.shadowScale = 1; s.player.rotation = 0;
     };
 
-    useEffect(() => {
-        stateRef.current.settings = settings;
-    }, [settings]);
-
-    useEffect(() => {
-        stateRef.current.selectedLetters = selectedLetters;
-    }, [selectedLetters]);
+    useEffect(() => { stateRef.current.settings = settings; }, [settings]);
+    useEffect(() => { stateRef.current.selectedLetters = selectedLetters; }, [selectedLetters]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -1434,16 +1181,13 @@ function App() {
                 b: parseInt(clean.slice(4, 6), 16)
             };
         };
-
         const colorLerp = (hex1, hex2, t) => {
-            const c1 = hexToRgb(hex1);
-            const c2 = hexToRgb(hex2);
+            const c1 = hexToRgb(hex1), c2 = hexToRgb(hex2);
             const r = Math.round(lerp(c1.r, c2.r, t));
             const g = Math.round(lerp(c1.g, c2.g, t));
             const b = Math.round(lerp(c1.b, c2.b, t));
             return `rgb(${r}, ${g}, ${b})`;
         };
-
         const roundRect = (x, y, w, h, r) => {
             ctx.beginPath();
             ctx.moveTo(x + r, y);
@@ -1458,24 +1202,14 @@ function App() {
         };
 
         const handleResize = () => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-
-            canvas.width = Math.round(w * dpr);
-            canvas.height = Math.round(h * dpr);
-            canvas.style.width = `${w}px`;
-            canvas.style.height = `${h}px`;
-
+            const w = window.innerWidth, h = window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+            canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+            canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = "high";
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
 
             const s = stateRef.current;
-            s.width = w;
-            s.height = h;
-            s.dpr = dpr;
-
+            s.width = w; s.height = h; s.dpr = dpr;
             const isPortrait = h > w;
             s.platformW = Math.max(140, Math.min(220, isPortrait ? w * 0.45 : w * 0.25));
             s.playerR = Math.max(24, Math.min(40, h * PLAYER_R_RATIO));
@@ -1484,24 +1218,17 @@ function App() {
             s.stepUp = Math.max(280, Math.min(400, h * 0.4));
             s.viewOffset = isPortrait ? h * 0.15 : h * 0.2;
             s.jumpArc = Math.max(h * DEFAULT_JUMP_ARC_RATIO, s.stepUp * 0.78);
-
             updateCameraTarget();
         };
 
-        const getImageFromAsset = (asset) => {
-            if (!asset) return null;
-            return asset.canvas || asset.img || null;
-        };
+        const getImageFromAsset = (asset) => asset ? (asset.canvas || asset.img || null) : null;
 
         const drawFloatingAsset = (asset, alpha, x, y, size, rotation = 0, mirrorX = false, options = {}) => {
             if (!asset || alpha <= 0.01 || size <= 0) return;
-
             const img = getImageFromAsset(asset);
             if (!img || !img.width || !img.height) return;
-
             const scale = size / Math.max(img.width, img.height);
-            const drawW = img.width * scale;
-            const drawH = img.height * scale;
+            const drawW = img.width * scale, drawH = img.height * scale;
             const { rocketFlame = false, flameFlicker = 0 } = options;
 
             ctx.save();
@@ -1512,9 +1239,7 @@ function App() {
 
             if (rocketFlame) {
                 const localScale = size / ROCKET_FLAME_BASE_SIZE;
-                const flicker = 0.88
-                    + (Math.sin(flameFlicker * 0.23) * 0.08)
-                    + (Math.sin(flameFlicker * 0.61 + 1.4) * 0.06);
+                const flicker = 0.88 + (Math.sin(flameFlicker * 0.23) * 0.08) + (Math.sin(flameFlicker * 0.61 + 1.4) * 0.06);
                 const flameLength = ROCKET_FLAME_LENGTH * localScale * flicker;
                 const flameWidth = ROCKET_FLAME_WIDTH * localScale;
                 const smokeX = ROCKET_SMOKE_X * localScale;
@@ -1533,13 +1258,10 @@ function App() {
                     ctx.fillStyle = '#dbe2ea';
                     ctx.beginPath();
                     ctx.ellipse(
-                        puffX,
-                        puffY,
+                        puffX, puffY,
                         flameWidth * (0.18 + t * 0.20),
                         flameWidth * (0.14 + t * 0.18),
-                        0,
-                        0,
-                        Math.PI * 2
+                        0, 0, Math.PI * 2
                     );
                     ctx.fill();
                 }
@@ -1554,7 +1276,6 @@ function App() {
                 outerGrad.addColorStop(0.25, 'rgba(255, 100, 0, 0.45)');
                 outerGrad.addColorStop(0.60, 'rgba(255, 172, 24, 0.86)');
                 outerGrad.addColorStop(1, 'rgba(255, 235, 160, 0.18)');
-
                 ctx.fillStyle = outerGrad;
                 ctx.beginPath();
                 ctx.moveTo(8 * localScale, 0);
@@ -1568,7 +1289,6 @@ function App() {
                 innerGrad.addColorStop(0, 'rgba(255, 150, 0, 0)');
                 innerGrad.addColorStop(0.45, 'rgba(255, 235, 100, 0.95)');
                 innerGrad.addColorStop(1, 'rgba(255, 255, 235, 0.6)');
-
                 ctx.fillStyle = innerGrad;
                 ctx.beginPath();
                 ctx.moveTo(6 * localScale, 0);
@@ -1576,7 +1296,6 @@ function App() {
                 ctx.quadraticCurveTo(-innerLength * 0.35, flameWidth * 0.45, 6 * localScale, 0);
                 ctx.closePath();
                 ctx.fill();
-
                 ctx.restore();
             }
 
@@ -1584,16 +1303,12 @@ function App() {
             ctx.restore();
         };
 
-
-
         const drawDirectionalSmokeTrail = (x, y, size, dx, dy, alpha, tick, options = {}) => {
             const lengthMultiplier = options.lengthMultiplier || 1;
             const puffCount = options.puffCount || METEOR_SMOKE_PUFFS;
             const magnitude = Math.hypot(dx, dy) || 1;
-            const dirX = dx / magnitude;
-            const dirY = dy / magnitude;
-            const normalX = -dirY;
-            const normalY = dirX;
+            const dirX = dx / magnitude, dirY = dy / magnitude;
+            const normalX = -dirY, normalY = dirX;
             const baseLength = size * METEOR_SMOKE_LENGTH * lengthMultiplier;
             const baseRadius = Math.max(8, size * 0.10);
 
@@ -1609,7 +1324,6 @@ function App() {
                 const radiusX = baseRadius * (0.44 + t * 1.10);
                 const radiusY = baseRadius * (0.30 + t * 0.78);
                 const puffAlpha = alpha * 0.30 * (1 - t) * (0.72 + Math.sin(tick * 0.05 + i) * 0.12);
-
                 if (puffAlpha <= 0.01) continue;
                 ctx.globalAlpha = puffAlpha;
                 ctx.fillStyle = "#d7d2c8";
@@ -1639,13 +1353,7 @@ function App() {
         };
 
         const getLayerMetrics = (asset, s, climb, speed, options = {}) => {
-            const {
-                anchor = "bottom",
-                heightRatio = 0.4,
-                widthBleed = 0,
-                baseOffset = 0,
-                extraScale = 1
-            } = options;
+            const { anchor = "bottom", heightRatio = 0.4, widthBleed = 0, baseOffset = 0, extraScale = 1 } = options;
             const img = getImageFromAsset(asset);
             if (!img || !img.width || !img.height) return null;
 
@@ -1657,11 +1365,8 @@ function App() {
             const drawW = img.width * scale;
             const drawH = img.height * scale;
             const x = (s.width - drawW) * 0.5;
-            const anchorY = anchor === "top"
-                ? baseOffset
-                : s.height - drawH + baseOffset;
+            const anchorY = anchor === "top" ? baseOffset : s.height - drawH + baseOffset;
             const y = anchorY + climb * speed;
-
             return { img, x, y, drawW, drawH };
         };
 
@@ -1703,54 +1408,36 @@ function App() {
 
         const drawMountainsLayer = (s, climb) => {
             const metrics = getLayerMetrics(assetsRef.current.mountains, s, climb, MOUNTAINS_LAYER_SPEED, {
-                anchor: "bottom",
-                heightRatio: 0.42,
-                widthBleed: 0.02,
-                baseOffset: -s.height * 0.18
+                anchor: "bottom", heightRatio: 0.42, widthBleed: 0.02, baseOffset: -s.height * 0.18
             });
             if (!metrics) return;
-
             const alpha = getLayerFade(climb, 2500, 4700);
             if (alpha <= 0.01) return;
-
-            ctx.save();
-            ctx.globalAlpha = alpha;
+            ctx.save(); ctx.globalAlpha = alpha;
             ctx.drawImage(metrics.img, metrics.x, metrics.y, metrics.drawW, metrics.drawH);
             ctx.restore();
         };
 
         const drawCloudLayer = (s, climb) => {
             const metrics = getLayerMetrics(assetsRef.current.clouds, s, climb, CLOUDS_LAYER_SPEED, {
-                anchor: "top",
-                heightRatio: 0.84,
-                widthBleed: 0.02,
-                baseOffset: -s.height * 0.28
+                anchor: "top", heightRatio: 0.84, widthBleed: 0.02, baseOffset: -s.height * 0.28
             });
             if (!metrics) return;
-
             const alpha = 0.92 * getLayerFade(climb, 1900, 4000);
             if (alpha <= 0.01) return;
-
-            ctx.save();
-            ctx.globalAlpha = alpha;
+            ctx.save(); ctx.globalAlpha = alpha;
             ctx.drawImage(metrics.img, metrics.x, metrics.y, metrics.drawW, metrics.drawH);
             ctx.restore();
         };
 
         const drawGroundLayer = (s, climb) => {
             const metrics = getLayerMetrics(assetsRef.current.ground, s, climb, GROUND_LAYER_SPEED, {
-                anchor: "bottom",
-                heightRatio: 0.72,
-                widthBleed: 0.01,
-                baseOffset: s.height * 0.08
+                anchor: "bottom", heightRatio: 0.72, widthBleed: 0.01, baseOffset: s.height * 0.08
             });
             if (!metrics) return;
-
             const alpha = getLayerFade(climb, 1350, 3300);
             if (alpha <= 0.01) return;
-
-            ctx.save();
-            ctx.globalAlpha = alpha;
+            ctx.save(); ctx.globalAlpha = alpha;
             ctx.drawImage(metrics.img, metrics.x, metrics.y, metrics.drawW, metrics.drawH);
             ctx.restore();
         };
@@ -1758,7 +1445,6 @@ function App() {
         const drawStars = (s, climb) => {
             const visible = clamp((climb - STAR_FIELD_START) / 500, 0, 1);
             if (visible <= 0.01) return;
-
             s.deco.stars.forEach((star, i) => {
                 const drift = climb * star.depth;
                 const x = star.x * s.width + Math.sin(s.time.tick * 0.0025 + i * 0.7) * star.wobble;
@@ -1769,32 +1455,24 @@ function App() {
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
-
                 const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 3.2);
                 glow.addColorStop(0, "rgba(255,255,255,0.95)");
                 glow.addColorStop(0.35, "rgba(210,230,255,0.45)");
                 glow.addColorStop(1, "rgba(255,255,255,0)");
                 ctx.fillStyle = glow;
-                ctx.beginPath();
-                ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, r * 3.2, 0, Math.PI * 2); ctx.fill();
 
                 ctx.fillStyle = "#ffffff";
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
 
                 if (star.sparkle) {
                     ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, alpha * 0.9)})`;
                     ctx.lineWidth = Math.max(0.7, r * 0.35);
                     ctx.beginPath();
-                    ctx.moveTo(x - r * 2.2, y);
-                    ctx.lineTo(x + r * 2.2, y);
-                    ctx.moveTo(x, y - r * 2.2);
-                    ctx.lineTo(x, y + r * 2.2);
+                    ctx.moveTo(x - r * 2.2, y); ctx.lineTo(x + r * 2.2, y);
+                    ctx.moveTo(x, y - r * 2.2); ctx.lineTo(x, y + r * 2.2);
                     ctx.stroke();
                 }
-
                 ctx.restore();
             });
         };
@@ -1807,22 +1485,18 @@ function App() {
             if (typeof type === "string" && type.startsWith("planet")) return assetsRef.current[type];
             return null;
         };
-
         const getCurrentClimb = (s) => Math.max(0, s.baseCameraY - s.cameraY);
-
         const chooseRandomSpaceType = (lastType = null) => {
             const pool = RANDOM_SPACE_TYPES.filter((type) => type !== lastType);
             const source = pool.length ? pool : RANDOM_SPACE_TYPES;
             return source[Math.floor(Math.random() * source.length)] || RANDOM_SPACE_TYPES[0];
         };
-
         const getNextSpaceTriggerScore = (score) => {
             if (score < MOON_SCORE) return MOON_SCORE;
             if (score < SATELLITE_SCORE) return SATELLITE_SCORE;
             if (score < SPACE_RANDOM_START_SCORE) return SPACE_RANDOM_START_SCORE;
             return score + SPACE_RANDOM_INTERVAL;
         };
-
         const getQuadraticDropScale = (size) => {
             const normalized = clamp((size - 150) / 150, 0, 1);
             return 0.28 + Math.pow(normalized, 2) * 0.9;
@@ -1832,37 +1506,14 @@ function App() {
             const nextTriggerScore = getNextSpaceTriggerScore(spawnScore);
             const panDirection = Math.random() < 0.5 ? -1 : 1;
             const base = {
-                type,
-                startTick,
-                spawnClimb,
-                spawnScore,
-                endScore: nextTriggerScore,
-                size: 220,
-                depth: "back",
-                mirrorX: false,
-                rotation: 0,
-                rotationDrift: 0,
-                phase: Math.random() * Math.PI * 2,
-                alignToPath: false,
-                angleOffset: 0,
-                mode: "drift",
-                entryXOffset: 0,
-                entryYOffset: -0.02,
-                entryDuration: 96,
-                driftAmpX: 8,
-                driftAmpY: 6,
-                driftSpeedX: 0.0036,
-                driftSpeedY: 0.0028,
-                levelDropPx: 16,
-                scaleLevelDropBySize: false,
-                flybyDuration: 250,
-                panXPerTick: 0,
-                panYPerTick: 0,
-                bobAmpY: 6,
-                bobSpeedY: 0.0024,
-                bobAmpX: 3,
-                bobSpeedX: 0.0017,
-                fadeFloor: 0.28
+                type, startTick, spawnClimb, spawnScore, endScore: nextTriggerScore,
+                size: 220, depth: "back", mirrorX: false, rotation: 0, rotationDrift: 0,
+                phase: Math.random() * Math.PI * 2, alignToPath: false, angleOffset: 0,
+                mode: "drift", entryXOffset: 0, entryYOffset: -0.02, entryDuration: 96,
+                driftAmpX: 8, driftAmpY: 6, driftSpeedX: 0.0036, driftSpeedY: 0.0028,
+                levelDropPx: 16, scaleLevelDropBySize: false, flybyDuration: 250,
+                panXPerTick: 0, panYPerTick: 0, bobAmpY: 6, bobSpeedY: 0.0024,
+                bobAmpX: 3, bobSpeedX: 0.0017, fadeFloor: 0.28
             };
 
             const planetVariants = {
@@ -1878,157 +1529,82 @@ function App() {
             if (planetVariants[type]) {
                 const variant = planetVariants[type];
                 const sizeMultiplier = 0.84 + Math.random() * 0.34;
-                return {
-                    ...base,
-                    ...variant,
-                    size: Math.round(variant.size * sizeMultiplier)
-                };
+                return { ...base, ...variant, size: Math.round(variant.size * sizeMultiplier) };
             }
 
             if (type === "satellite") {
                 return {
-                    ...base,
-                    size: 198,
-                    x: 0.72,
-                    y: 0.24,
-                    entryXOffset: 0.035,
-                    entryYOffset: -0.018,
-                    entryDuration: 100,
-                    panXPerTick: -0.028,
-                    panYPerTick: 0.016,
-                    bobAmpY: 4,
-                    bobSpeedY: 0.0019,
-                    bobAmpX: 2,
-                    bobSpeedX: 0.0013,
-                    rotation: 0.12,
-                    rotationDrift: 0.012,
-                    levelDropPx: 22,
-                    fadeFloor: 0.34
+                    ...base, size: 198, x: 0.72, y: 0.24, entryXOffset: 0.035, entryYOffset: -0.018, entryDuration: 100,
+                    panXPerTick: -0.028, panYPerTick: 0.016, bobAmpY: 4, bobSpeedY: 0.0019, bobAmpX: 2, bobSpeedX: 0.0013,
+                    rotation: 0.12, rotationDrift: 0.012, levelDropPx: 22, fadeFloor: 0.34
                 };
             }
 
             if (type === "rocket") {
                 const flyRight = Math.random() < 0.5;
-                const fromX = flyRight ? -0.20 : 1.20;
-                const toX = flyRight ? 1.14 : -0.14;
+                const fromX = flyRight ? -0.12 : 1.12;
+                const toX = flyRight ? 1.08 : -0.08;
                 const fromY = 0.18 + Math.random() * 0.60;
                 const toY = clamp(fromY + (-0.24 + Math.random() * 0.48), 0.10, 0.88);
-
                 return {
-                    ...base,
-                    mode: "flyby",
-                    depth: "front",
-                    size: 174 + Math.round(Math.random() * 38),
-                    fromX,
-                    fromY,
-                    toX,
-                    toY,
-                    alignToPath: true,
-                    angleOffset: Math.PI / 2,
-                    mirrorX: false,
-                    flybyDuration: 220 + Math.round(Math.random() * 90),
-                    levelDropPx: 0,
-                    fadeFloor: 1
+                    ...base, mode: "flyby", depth: "front", size: 174 + Math.round(Math.random() * 38),
+                    fromX, fromY, toX, toY, alignToPath: true, angleOffset: Math.PI / 2,
+                    mirrorX: false, flybyDuration: 220 + Math.round(Math.random() * 90),
+                    levelDropPx: 0, fadeFloor: 1
                 };
             }
 
             if (type === "meteor") {
                 const flyRight = Math.random() < 0.5;
-                const fromX = flyRight ? -0.18 : 1.18;
-                const toX = flyRight ? 1.12 : -0.12;
+                const fromX = flyRight ? -0.10 : 1.10;
+                const toX = flyRight ? 1.08 : -0.08;
                 const fromY = 0.06 + Math.random() * 0.28;
                 const toY = clamp(fromY + 0.44 + Math.random() * 0.32, 0.54, 1.04);
-
                 return {
-                    ...base,
-                    mode: "flyby",
-                    depth: "front",
-                    size: 184 + Math.round(Math.random() * 34),
-                    fromX,
-                    fromY,
-                    toX,
-                    toY,
-                    alignToPath: true,
+                    ...base, mode: "flyby", depth: "front", size: 184 + Math.round(Math.random() * 34),
+                    fromX, fromY, toX, toY, alignToPath: true,
                     angleOffset: flyRight ? -Math.PI * 0.75 : Math.PI * 0.75,
-                    mirrorX: !flyRight,
-                    flybyDuration: 170 + Math.round(Math.random() * 40),
-                    levelDropPx: 0,
-                    fadeFloor: 1
+                    mirrorX: !flyRight, flybyDuration: 170 + Math.round(Math.random() * 40),
+                    levelDropPx: 0, fadeFloor: 1
                 };
             }
 
             if (type === "ufo") {
                 return {
-                    ...base,
-                    depth: "front",
-                    size: 188,
-                    x: 0.34,
-                    y: 0.22,
-                    entryXOffset: -0.035,
-                    entryYOffset: -0.016,
-                    entryDuration: 98,
-                    panXPerTick: 0.036,
-                    panYPerTick: 0.018,
-                    bobAmpY: 5,
-                    bobSpeedY: 0.0021,
-                    bobAmpX: 3,
-                    bobSpeedX: 0.0016,
-                    rotation: 0.03,
-                    rotationDrift: 0.012,
-                    levelDropPx: 20,
-                    fadeFloor: 0.34
+                    ...base, depth: "front", size: 188, x: 0.34, y: 0.22, entryXOffset: -0.035, entryYOffset: -0.016, entryDuration: 98,
+                    panXPerTick: 0.036, panYPerTick: 0.018, bobAmpY: 5, bobSpeedY: 0.0021, bobAmpX: 3, bobSpeedX: 0.0016,
+                    rotation: 0.03, rotationDrift: 0.012, levelDropPx: 20, fadeFloor: 0.34
                 };
             }
-
-            return {
-                ...base,
-                x: 0.5,
-                y: 0.22
-            };
+            return { ...base, x: 0.5, y: 0.22 };
         };
 
         const activateNextSpaceObject = (s, type = null) => {
             const nextType = type || null;
-            if (!nextType) {
-                s.deco.activeSpaceObject = null;
-                return;
-            }
-
+            if (!nextType) { s.deco.activeSpaceObject = null; return; }
             s.deco.activeSpaceObject = createSpaceObjectInstance(nextType, s.time.tick, getCurrentClimb(s), s.score);
         };
 
         const triggerSpaceAssetForScore = (s) => {
             const fixedType = FIXED_SPACE_SCORE_EVENTS[s.score];
             let nextType = fixedType || null;
-
             if (!nextType && s.score >= SPACE_RANDOM_START_SCORE && (s.score - SPACE_RANDOM_START_SCORE) % SPACE_RANDOM_INTERVAL === 0) {
                 nextType = chooseRandomSpaceType(s.deco.lastRandomSpaceType);
             }
-
             if (!nextType) return;
-
-            if (RANDOM_SPACE_TYPES.includes(nextType)) {
-                s.deco.lastRandomSpaceType = nextType;
-            }
-
+            if (RANDOM_SPACE_TYPES.includes(nextType)) s.deco.lastRandomSpaceType = nextType;
             activateNextSpaceObject(s, nextType);
         };
 
         const scheduleNextRocketFlyby = (s, firstAfterUnlock = false, delayTicks = null) => {
-            if (Number.isFinite(delayTicks)) {
-                s.deco.nextRocketFlybyTick = s.time.tick + Math.max(1, delayTicks);
-                return;
-            }
+            if (Number.isFinite(delayTicks)) { s.deco.nextRocketFlybyTick = s.time.tick + Math.max(1, delayTicks); return; }
             const minTicks = firstAfterUnlock ? ROCKET_FLYBY_FIRST_TICK_MIN : ROCKET_FLYBY_TICK_MIN;
             const maxTicks = firstAfterUnlock ? ROCKET_FLYBY_FIRST_TICK_MAX : ROCKET_FLYBY_TICK_MAX;
             s.deco.nextRocketFlybyTick = s.time.tick + minTicks + Math.random() * Math.max(1, maxTicks - minTicks);
         };
 
         const scheduleNextMeteorFlyby = (s, firstAfterUnlock = false, delayTicks = null) => {
-            if (Number.isFinite(delayTicks)) {
-                s.deco.nextMeteorFlybyTick = s.time.tick + Math.max(1, delayTicks);
-                return;
-            }
+            if (Number.isFinite(delayTicks)) { s.deco.nextMeteorFlybyTick = s.time.tick + Math.max(1, delayTicks); return; }
             const minTicks = firstAfterUnlock ? METEOR_FLYBY_FIRST_TICK_MIN : METEOR_FLYBY_TICK_MIN;
             const maxTicks = firstAfterUnlock ? METEOR_FLYBY_FIRST_TICK_MAX : METEOR_FLYBY_TICK_MAX;
             s.deco.nextMeteorFlybyTick = s.time.tick + minTicks + Math.random() * Math.max(1, maxTicks - minTicks);
@@ -2055,85 +1631,52 @@ function App() {
         };
 
         const spawnRocketFlyby = (s) => {
-            pruneExpiredRocketFlybys(s);
-            pruneExpiredMeteorFlybys(s);
-
+            pruneExpiredRocketFlybys(s); pruneExpiredMeteorFlybys(s);
             const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
             const hasMeteorInFlight = Array.isArray(s.deco.activeMeteorFlybys) && s.deco.activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasRocketInFlight) return;
-            if (hasMeteorInFlight) {
-                scheduleNextRocketFlyby(s, false, 120);
-                return;
-            }
-
-            s.deco.activeRocketFlybys = [
-                ...activeFlybys,
-                createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)
-            ];
+            if (hasMeteorInFlight) { scheduleNextRocketFlyby(s, false, 120); return; }
+            s.deco.activeRocketFlybys = [...activeFlybys, createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)];
             scheduleNextRocketFlyby(s, false);
         };
 
         const spawnMeteorFlyby = (s) => {
-            pruneExpiredMeteorFlybys(s);
-            pruneExpiredRocketFlybys(s);
-
+            pruneExpiredMeteorFlybys(s); pruneExpiredRocketFlybys(s);
             const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
             const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
             const hasRocketInFlight = Array.isArray(s.deco.activeRocketFlybys) && s.deco.activeRocketFlybys.some((obj) => obj && obj.type === "rocket");
             if (hasMeteorInFlight) return;
-            if (hasRocketInFlight) {
-                scheduleNextMeteorFlyby(s, false, 120);
-                return;
-            }
-
-            s.deco.activeMeteorFlybys = [
-                ...activeFlybys,
-                createSpaceObjectInstance("meteor", s.time.tick, getCurrentClimb(s), s.score)
-            ];
+            if (hasRocketInFlight) { scheduleNextMeteorFlyby(s, false, 120); return; }
+            s.deco.activeMeteorFlybys = [...activeFlybys, createSpaceObjectInstance("meteor", s.time.tick, getCurrentClimb(s), s.score)];
             s.deco.lastMeteorScore = s.score;
             scheduleNextMeteorFlyby(s, false);
         };
 
         const triggerRocketFlybyForScore = (s) => {
             if (s.score < ROCKET_FLYBY_START_SCORE) return;
-            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) {
-                scheduleNextRocketFlyby(s, true);
-            }
+            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) scheduleNextRocketFlyby(s, true);
         };
-
         const updateTimedRocketFlybys = (s) => {
             if (s.score < ROCKET_FLYBY_START_SCORE) return;
             pruneExpiredRocketFlybys(s);
-            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) {
-                scheduleNextRocketFlyby(s, true);
-            }
-            if (s.time.tick >= (s.deco.nextRocketFlybyTick ?? Number.POSITIVE_INFINITY)) {
-                spawnRocketFlyby(s);
-            }
+            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) scheduleNextRocketFlyby(s, true);
+            if (s.time.tick >= (s.deco.nextRocketFlybyTick ?? Number.POSITIVE_INFINITY)) spawnRocketFlyby(s);
         };
 
         const triggerMeteorFlybyForScore = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
-            if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) {
-                scheduleNextMeteorFlyby(s, true);
-            }
+            if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) scheduleNextMeteorFlyby(s, true);
         };
-
         const updateTimedMeteorFlybys = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
             pruneExpiredMeteorFlybys(s);
-            if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) {
-                scheduleNextMeteorFlyby(s, true);
-            }
-            if (s.time.tick >= (s.deco.nextMeteorFlybyTick ?? Number.POSITIVE_INFINITY)) {
-                spawnMeteorFlyby(s);
-            }
+            if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) scheduleNextMeteorFlyby(s, true);
+            if (s.time.tick >= (s.deco.nextMeteorFlybyTick ?? Number.POSITIVE_INFINITY)) spawnMeteorFlyby(s);
         };
 
         const getSpaceObjectWorldState = (obj, s) => {
             if (!obj) return null;
-
             const elapsedTicks = Math.max(0, s.time.tick - (obj.startTick || 0));
             const scoreDelta = Math.max(0, s.score - (obj.spawnScore || 0));
             const scoreWindow = Math.max(1, (obj.endScore || ((obj.spawnScore || 0) + 1)) - (obj.spawnScore || 0));
@@ -2146,8 +1689,7 @@ function App() {
             const levelDropScale = obj.scaleLevelDropBySize ? getQuadraticDropScale(obj.size || 220) : 1;
             const verticalFollow = smoothStep(0, 1, fadeProgress) * levelDropBase * levelDropScale;
 
-            let x = 0;
-            let y = 0;
+            let x = 0, y = 0;
             let rotation = obj.rotation || 0;
             let visibility = smoothStep(0, 1, entranceProgress) * fadeDown;
             let progress = fadeProgress;
@@ -2171,11 +1713,12 @@ function App() {
                     rotation = Math.atan2(dy, dx) + (obj.angleOffset || 0);
                 }
 
+                const margin = Math.max(s.width, s.height, obj.size || 220) * 0.35 + (obj.size || 220);
                 outOfView = flightProgress >= 1 || (
-                    x < -(obj.size || 220) * 1.35 ||
-                    x > s.width + (obj.size || 220) * 1.35 ||
-                    y < -(obj.size || 220) * 1.35 ||
-                    y > s.height + (obj.size || 220) * 1.35
+                    x < -margin ||
+                    x > s.width + margin ||
+                    y < -margin ||
+                    y > s.height + margin
                 );
             } else {
                 const phase = obj.phase || 0;
@@ -2190,20 +1733,15 @@ function App() {
 
                 x = baseX + panX;
                 x += Math.sin(elapsedTicks * bobSpeedX + phase) * bobAmpX;
-
                 y = baseY + panY;
                 y += Math.sin(elapsedTicks * bobSpeedY + phase * 1.07) * bobAmpY;
                 y += verticalFollow;
-
                 rotation = (obj.rotation || 0) + Math.sin(elapsedTicks * 0.0022 + phase) * (obj.rotationDrift || 0);
             }
 
             const isFront = obj.depth === "front";
             return {
-                x,
-                y,
-                progress,
-                visibility,
+                x, y, progress, visibility,
                 size: obj.size * (isFront ? 1.03 : 1),
                 rotation,
                 alpha: (isFront ? 0.96 : 0.86) * visibility,
@@ -2217,7 +1755,6 @@ function App() {
             const visibleFlybys = clamp((s.score - FLYBY_VISIBILITY_START_SCORE + 1) / Math.max(1, FLYBY_VISIBILITY_SCORE_RANGE), 0, 1);
             const hasActiveFlybys = (Array.isArray(s.deco.activeRocketFlybys) && s.deco.activeRocketFlybys.length > 0)
                 || (Array.isArray(s.deco.activeMeteorFlybys) && s.deco.activeMeteorFlybys.length > 0);
-
             if (visibleSpace <= 0.01 && visibleFlybys <= 0.01 && !hasActiveFlybys) return;
 
             const active = s.deco.activeSpaceObject;
@@ -2232,80 +1769,69 @@ function App() {
                         state.size,
                         state.rotation,
                         state.mirrorX,
-                        {
-                            rocketFlame: active.type === "rocket",
-                            flameFlicker: s.time.tick + (active.startTick || 0)
-                        }
+                        { rocketFlame: active.type === "rocket", flameFlicker: s.time.tick + (active.startTick || 0) }
                     );
                 }
             }
 
             const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const remainingRocketFlybys = [];
-
             activeRocketFlybys.forEach((obj) => {
                 const state = getSpaceObjectWorldState(obj, s);
                 if (!state || state.outOfView) return;
-
                 remainingRocketFlybys.push(obj);
                 drawFloatingAsset(
                     getSpaceAsset(obj.type),
                     visibleFlybys * state.alpha,
-                    state.x,
-                    state.y,
-                    state.size,
-                    state.rotation,
-                    state.mirrorX,
-                    {
-                        rocketFlame: obj.type === "rocket",
-                        flameFlicker: s.time.tick + (obj.startTick || 0)
-                    }
+                    state.x, state.y, state.size, state.rotation, state.mirrorX,
+                    { rocketFlame: obj.type === "rocket", flameFlicker: s.time.tick + (obj.startTick || 0) }
                 );
             });
-
             s.deco.activeRocketFlybys = remainingRocketFlybys;
 
             const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
             const remainingMeteorFlybys = [];
-
             activeMeteorFlybys.forEach((obj) => {
                 const state = getSpaceObjectWorldState(obj, s);
                 if (!state || state.outOfView) return;
-
                 remainingMeteorFlybys.push(obj);
                 const dx = (obj.toX ?? 1.12) - (obj.fromX ?? -0.18);
                 const dy = (obj.toY ?? 0.8) - (obj.fromY ?? 0.2);
                 drawDirectionalSmokeTrail(
-                    state.x,
-                    state.y,
-                    state.size,
-                    dx,
-                    dy,
+                    state.x, state.y, state.size, dx, dy,
                     visibleFlybys * state.alpha,
                     s.time.tick + (obj.startTick || 0)
                 );
                 drawFloatingAsset(
                     getSpaceAsset(obj.type),
                     visibleFlybys * state.alpha,
-                    state.x,
-                    state.y,
-                    state.size,
-                    state.rotation,
-                    state.mirrorX
+                    state.x, state.y, state.size, state.rotation, state.mirrorX
                 );
             });
-
             s.deco.activeMeteorFlybys = remainingMeteorFlybys;
         };
 
-        const drawAtmosphereOverlay = (s, climb) => {
-            const darkness = clamp(climb / 3600, 0, 1);
-            const upperShade = ctx.createLinearGradient(0, 0, 0, s.height);
-            upperShade.addColorStop(0, `rgba(0,0,0,${0.04 + darkness * 0.40})`);
-            upperShade.addColorStop(0.4, `rgba(0,0,0,${0.01 + darkness * 0.12})`);
-            upperShade.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = upperShade;
-            ctx.fillRect(0, 0, s.width, s.height);
+        const getAstronautFrame = (s) => {
+            const jumpAsset = assetsRef.current.astronaut;
+            const fallAsset = assetsRef.current.astronautFall;
+            if (s.gameState === "falling" && fallAsset && fallAsset.ready && fallAsset.frames.length) {
+                const total = fallAsset.frames.length;
+                const fallTime = s.fallingPlatform?.fallTime || 0;
+                const visualProgress = clamp(fallTime / FALL_ANIMATION_FRAMES, 0, 1);
+                const fallFrameIndex = visualProgress >= 1 ? total - 1 : Math.min(total - 1, Math.floor(visualProgress * (total - 1)));
+                return { frame: fallAsset.frames[fallFrameIndex], mode: "fall" };
+            }
+            if (!jumpAsset || !jumpAsset.ready || !jumpAsset.frames.length) return null;
+            const total = jumpAsset.frames.length;
+            const maxFrameIndex = total - 1;
+
+            if (s.gameState === "jumping" || s.gameState === "respawning") {
+                const animationT = s.gameState === "respawning" ? s.respawnT : s.player.jumpT;
+                const jumpState = getJumpAnimationState(animationT, total);
+                return { frame: jumpAsset.frames[Math.min(maxFrameIndex, jumpState.frameIndex)], mode: "jump" };
+            }
+            const loopFrameIndex = ((Math.floor(s.time.idleFrameClock) % total) + total) % total;
+            return { frame: jumpAsset.frames[loopFrameIndex], mode: "idle" };
         };
 
         const drawPlatform = (s, p) => {
@@ -2341,93 +1867,39 @@ function App() {
             ctx.fill();
 
             const circleY = top - 32;
-
             if (p.letter && p.circleAlpha > 0.01) {
                 ctx.save();
                 ctx.globalAlpha *= p.circleAlpha;
-                const rg = ctx.createRadialGradient(
-                    -s.circleR * 0.2,
-                    circleY - s.circleR * 0.2,
-                    8,
-                    0,
-                    circleY,
-                    s.circleR
-                );
+                const rg = ctx.createRadialGradient(-s.circleR * 0.2, circleY - s.circleR * 0.2, 8, 0, circleY, s.circleR);
                 rg.addColorStop(0, "#ffffff");
                 rg.addColorStop(1, "#e9f3ff");
                 ctx.fillStyle = rg;
                 ctx.beginPath();
                 ctx.arc(0, circleY, s.circleR, 0, Math.PI * 2);
                 ctx.fill();
-
                 ctx.strokeStyle = "rgba(28,38,54,0.12)";
                 ctx.lineWidth = 3;
                 ctx.stroke();
-
                 ctx.fillStyle = "#24303a";
                 ctx.font = `bold ${Math.floor(s.circleR * 1.4)}px ${DISPLAY_FONT_STACK}`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 ctx.fillText(p.letter.toLowerCase(), 0, circleY + 1);
                 ctx.restore();
             }
-
             ctx.restore();
-        };
-
-        const getAstronautFrame = (s) => {
-            const jumpAsset = assetsRef.current.astronaut;
-            const fallAsset = assetsRef.current.astronautFall;
-
-            if (s.gameState === "falling" && fallAsset && fallAsset.ready && fallAsset.frames.length) {
-                const total = fallAsset.frames.length;
-                const fallTime = s.fallingPlatform?.fallTime || 0;
-                const visualProgress = clamp(fallTime / FALL_ANIMATION_FRAMES, 0, 1);
-                const fallFrameIndex = visualProgress >= 1
-                    ? total - 1
-                    : Math.min(total - 1, Math.floor(visualProgress * (total - 1)));
-                return {
-                    frame: fallAsset.frames[fallFrameIndex],
-                    mode: "fall"
-                };
-            }
-
-            if (!jumpAsset || !jumpAsset.ready || !jumpAsset.frames.length) return null;
-
-            const total = jumpAsset.frames.length;
-            const maxFrameIndex = total - 1;
-
-            if (s.gameState === "jumping" || s.gameState === "respawning") {
-                const animationT = s.gameState === "respawning" ? s.respawnT : s.player.jumpT;
-                const jumpState = getJumpAnimationState(animationT, total);
-                return {
-                    frame: jumpAsset.frames[Math.min(maxFrameIndex, jumpState.frameIndex)],
-                    mode: "jump"
-                };
-            }
-
-            const loopFrameIndex = ((Math.floor(s.time.idleFrameClock) % total) + total) % total;
-            return {
-                frame: jumpAsset.frames[loopFrameIndex],
-                mode: "idle"
-            };
         };
 
         const drawPlayer = (s) => {
             if (s.gameState === "cameraDrop") return;
-
             const frameState = getAstronautFrame(s);
             const footY = s.player.y + s.player.r;
-            const playerAlpha = s.gameState === "respawning"
-                ? smoothStep(0, RESPAWN_FADE_PORTION, s.respawnT)
-                : 1;
+            const playerAlpha = s.gameState === "respawning" ? smoothStep(0, RESPAWN_FADE_PORTION, s.respawnT) : 1;
 
             if (!frameState || !frameState.frame) {
                 ctx.save();
                 ctx.globalAlpha = playerAlpha;
                 ctx.font = `bold ${Math.floor(s.player.r * 2.2)}px ${DISPLAY_FONT_STACK}`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "bottom";
+                ctx.textAlign = "center"; ctx.textBaseline = "bottom";
                 ctx.fillText("👨‍🚀", s.player.x, footY + 6);
                 ctx.restore();
                 return;
@@ -2444,7 +1916,6 @@ function App() {
             ctx.globalAlpha = playerAlpha;
             ctx.translate(s.player.x, anchorY);
             ctx.rotate(s.player.rotation || 0);
-
             if (mode === "fall") {
                 const cropRight = Math.min(FALL_SOURCE_CROP_RIGHT, Math.max(0, frame.width - 2));
                 const sourceW = Math.max(1, frame.width - cropRight);
@@ -2452,7 +1923,6 @@ function App() {
             } else {
                 ctx.drawImage(frame, -drawW / 2, -drawH, drawW, drawH);
             }
-
             ctx.restore();
         };
 
@@ -2461,29 +1931,17 @@ function App() {
             const enabled = Boolean(s.targetLetter);
             const pressed = repeatPressedRef.current;
             const maxW = Math.min(190, s.width * 0.34);
-            const aspect = asset?.ready && asset.img?.width && asset.img?.height
-                ? asset.img.width / Math.max(1, asset.img.height)
-                : 1;
+            const aspect = asset?.ready && asset.img?.width && asset.img?.height ? asset.img.width / Math.max(1, asset.img.height) : 1;
             const btnW = maxW;
             const btnH = btnW / Math.max(0.4, aspect);
-            const x = (s.width - btnW) / 2;
-            const y = 14;
+            const x = (s.width - btnW) / 2, y = 14;
 
-            repeatButtonRectRef.current = {
-                x,
-                y,
-                w: btnW,
-                h: btnH,
-                enabled
-            };
+            repeatButtonRectRef.current = { x, y, w: btnW, h: btnH, enabled };
 
             ctx.save();
             ctx.globalAlpha = enabled ? 1 : 0.58;
             ctx.translate(x + btnW / 2, y + btnH / 2);
-
-            if (pressed) {
-                ctx.scale(0.94, 0.94);
-            }
+            if (pressed) ctx.scale(0.94, 0.94);
 
             if (asset?.ready && asset.img) {
                 ctx.filter = pressed ? "brightness(0.82)" : "none";
@@ -2498,8 +1956,7 @@ function App() {
                 ctx.fill();
                 ctx.fillStyle = "#24303a";
                 ctx.font = `bold ${Math.floor(btnH * 0.26)}px ${DISPLAY_FONT_STACK}`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 ctx.fillText("Herhaal vraag", 0, 0);
             }
 
@@ -2510,29 +1967,18 @@ function App() {
                 ctx.roundRect(-btnW / 2 + 6, -btnH / 2 + 6, btnW - 12, btnH - 12, 18);
                 ctx.stroke();
             }
-
             ctx.restore();
         };
 
         const collectPlatforms = (s) => {
-            const list = [];
-            const seen = new Set();
-            const add = (p) => {
-                if (!p || seen.has(p)) return;
-                seen.add(p);
-                list.push(p);
-            };
-
-            add(s.currentPlatform);
-            add(s.chosenTarget);
-            s.nextPlatforms.forEach(add);
-            s.oldPlatforms.forEach(add);
+            const list = [], seen = new Set();
+            const add = (p) => { if (!p || seen.has(p)) return; seen.add(p); list.push(p); };
+            add(s.currentPlatform); add(s.chosenTarget);
+            s.nextPlatforms.forEach(add); s.oldPlatforms.forEach(add);
             return list;
         };
-
         const pruneOldPlatforms = (s) => {
-            const minY = s.cameraY - 260;
-            const maxY = s.cameraY + s.height + 620;
+            const minY = s.cameraY - 260, maxY = s.cameraY + s.height + 620;
             s.oldPlatforms = s.oldPlatforms.filter((p) => p && p.alpha > 0.02 && p.y > minY && p.y < maxY);
         };
 
@@ -2552,7 +1998,6 @@ function App() {
 
             if (s.gameState === "waiting" || s.gameState === "landingPause") {
                 updatePlayerIdlePose();
-
                 if (s.gameState === "landingPause") {
                     s.landingPauseTimer -= dtFrames;
                     if (s.landingPauseTimer <= 0) {
@@ -2562,20 +2007,15 @@ function App() {
                 }
             } else if (s.gameState === "jumping") {
                 const astronautFrameCount = Math.max(2, assetsRef.current.astronaut?.frames?.length || ASTRONAUT_TOTAL_FRAMES);
-
                 s.player.jumpT += dtFrames / Math.max(8, s.settings.jumpFrames);
                 const t = Math.min(1, s.player.jumpT);
                 const jumpState = getJumpAnimationState(t, astronautFrameCount);
                 const motionT = clamp(jumpState.motionProgress, 0, 1);
                 const eased = easeInOut(motionT);
                 const arc = Math.sin(motionT * Math.PI) * s.jumpArc * s.settings.jumpAnimSpeed;
-
                 s.player.x = lerp(s.player.jumpStartX, s.player.jumpEndX, eased);
                 s.player.y = lerp(s.player.jumpStartY, s.player.jumpEndY, eased) - arc;
-                s.player.squashX = 1;
-                s.player.squashY = 1;
-                s.player.shadowScale = 1 - Math.sin(motionT * Math.PI) * 0.42;
-                s.player.rotation = 0;
+                s.player.squashX = 1; s.player.squashY = 1; s.player.shadowScale = 1 - Math.sin(motionT * Math.PI) * 0.42; s.player.rotation = 0;
 
                 if (t >= 1) {
                     if (s.chosenTarget && s.chosenTarget.correct) {
@@ -2587,11 +2027,9 @@ function App() {
                         triggerSpaceAssetForScore(s);
                         triggerRocketFlybyForScore(s);
                         triggerMeteorFlybyForScore(s);
-
                         prepareNextRound();
                         s.nextPlatforms = s.pendingNextPlatforms;
                         s.pendingNextPlatforms = [];
-
                         s.gameState = "landingPause";
                         setGameState("landingPause");
                         s.landingPauseTimer = 8;
@@ -2603,7 +2041,6 @@ function App() {
                         s.currentPlatform = s.chosenTarget;
                         s.fallingPlatform = s.chosenTarget;
                         s.nextPlatforms = [];
-
                         s.fallingPlatform.falling = true;
                         s.fallingPlatform.fallSpeed = 0;
                         s.fallingPlatform.fallTime = 0;
@@ -2614,14 +2051,12 @@ function App() {
                         s.fallingPlatform.rotation = 0;
                         s.fallingPlatform.rotationSpeed = 0;
                         s.fallingPlatform.astronautOffsetY = WRONG_FALL_START_OFFSET;
-
                         s.player.vy = 0;
                         s.player.jumpT = 1;
                         placePlayerOnPlatform();
                         s.player.y += WRONG_FALL_START_OFFSET;
                         s.fallCameraStartY = s.cameraY;
                         s.fallCameraTargetY = s.cameraY;
-
                         s.gameState = "falling";
                         setGameState("falling");
                     }
@@ -2632,17 +2067,13 @@ function App() {
 
                 if (fallingPlatform) {
                     fallingPlatform.fallTime += dtFrames;
-
-                    const anticipationFrames = 10;
-                    const dropFrames = 84;
-
+                    const anticipationFrames = 10, dropFrames = 84;
                     const astronautFallOffset = fallingPlatform.astronautOffsetY || 0;
 
                     if (fallingPlatform.fallTime <= anticipationFrames) {
                         const tAnt = clamp(fallingPlatform.fallTime / anticipationFrames, 0, 1);
                         const dip = smoothStep(0, 1, tAnt) * 12;
                         const wobble = Math.sin(tAnt * Math.PI);
-
                         fallingPlatform.x = fallingPlatform.fallStartX;
                         fallingPlatform.y = fallingPlatform.fallStartY + dip;
                         fallingPlatform.rotation = fallingPlatform.fallTiltDir * 0.04 * wobble;
@@ -2670,24 +2101,17 @@ function App() {
                         s.player.x = fallingPlatform.x + fallingPlatform.w / 2;
                         s.player.y = getPlayerContactY(fallingPlatform.y, s.circleR) - s.player.r + astronautFallOffset - liftDuringDrop;
                         s.player.shadowScale = Math.max(0.62, 1 - rawDropT * 0.14);
-                        s.player.squashX = 1;
-                        s.player.squashY = 1;
-                        s.player.rotation = 0;
+                        s.player.squashX = 1; s.player.squashY = 1; s.player.rotation = 0;
                     }
                 }
 
                 if (!fallingPlatform || s.player.y - s.cameraY > s.height + s.player.r * 4) {
-                    s.player.rotation = 0;
-                    s.player.squashX = 1;
-                    s.player.squashY = 1;
+                    s.player.rotation = 0; s.player.squashX = 1; s.player.squashY = 1;
                     queueRespawnFromBottom();
                 }
             } else if (s.gameState === "cameraDrop") {
                 s.targetCameraY = s.baseCameraY;
-                s.player.rotation = 0;
-                s.player.squashX = 1;
-                s.player.squashY = 1;
-
+                s.player.rotation = 0; s.player.squashX = 1; s.player.squashY = 1;
                 if (Math.abs(s.baseCameraY - s.cameraY) < 1.5) {
                     s.gameState = "respawning";
                     setGameState("respawning");
@@ -2697,16 +2121,12 @@ function App() {
                 s.respawnT = respawnT;
                 s.respawnAlpha = smoothStep(0, RESPAWN_FADE_PORTION, respawnT);
                 s.targetCameraY = s.baseCameraY;
-
                 const eased = 1 - Math.pow(1 - respawnT, 3);
                 const arc = Math.sin(respawnT * Math.PI) * s.respawnArc;
                 s.player.x = lerp(s.respawnStartX, s.respawnEndX, eased);
                 s.player.y = lerp(s.respawnStartY, s.respawnEndY, eased) - arc;
                 s.player.shadowScale = Math.max(0.72, 1 - Math.sin(respawnT * Math.PI) * 0.2);
-                s.player.squashX = 1;
-                s.player.squashY = 1;
-                s.player.rotation = 0;
-
+                s.player.squashX = 1; s.player.squashY = 1; s.player.rotation = 0;
                 if (respawnT >= 1) {
                     s.respawnAlpha = 1;
                     placePlayerOnPlatform();
@@ -2717,7 +2137,6 @@ function App() {
 
             pruneOldPlatforms(s);
             const allPlatforms = collectPlatforms(s);
-
             allPlatforms.forEach((p) => {
                 if (!p) return;
                 const targetAlpha = s.nextPlatforms.includes(p) ? 1 : 0;
@@ -2745,7 +2164,6 @@ function App() {
         };
 
         loop();
-
         return () => {
             window.removeEventListener("resize", handleResize);
             cancelAnimationFrame(animationFrameId);
@@ -2755,7 +2173,6 @@ function App() {
     const getTappedPlatform = (clientX, clientY) => {
         const s = stateRef.current;
         if (s.gameState !== "waiting") return null;
-
         const worldY = clientY + s.cameraY;
         const candidates = s.nextPlatforms.filter(Boolean).map((p) => {
             const cx = p.x + p.w / 2;
@@ -2766,16 +2183,13 @@ function App() {
                 worldY >= cy - s.circleR - HIT_PADDING_Y &&
                 worldY <= p.y + p.h + HIT_PADDING_Y
             );
-            const dx = clientX - cx;
-            const dy = worldY - cy;
+            const dx = clientX - cx, dy = worldY - cy;
             const insideCircle = (dx * dx) + (dy * dy) <= Math.pow(s.circleR + 20, 2);
             const distance = Math.abs(clientX - cx) + Math.abs(worldY - cy);
             return { p, inside: insideRect || insideCircle, distance };
         });
-
         const directHit = candidates.find((item) => item.inside);
         if (directHit) return directHit.p;
-
         const nearest = candidates.sort((a, b) => a.distance - b.distance)[0];
         if (nearest && nearest.distance < s.platformW * 0.9) return nearest.p;
         return null;
@@ -2792,7 +2206,6 @@ function App() {
                 return;
             }
         }
-
         const target = getTappedPlatform(e.clientX, e.clientY);
         if (target) choosePlatform(target);
     };
@@ -2891,7 +2304,7 @@ function App() {
                         {!canStartGame && (
                             <div className="warning-note">Kies minimaal 2 letters in de instellingen.</div>
                         )}
-{(astronautStatus.loading || fallAstronautStatus.loading || (!musicReady && !musicFailed)) && (
+                        {(astronautStatus.loading || fallAstronautStatus.loading || (!musicReady && !musicFailed)) && (
                             <div className="loading-note">Animaties en muziek worden geladen...</div>
                         )}
                         {(astronautStatus.failed || fallAstronautStatus.failed || musicFailed) && (
