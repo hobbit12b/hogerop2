@@ -322,11 +322,11 @@ const SPACE_RANDOM_START_SCORE = 20;
 const SPACE_RANDOM_INTERVAL = 6;
 const FLYBY_VISIBILITY_START_SCORE = 1;
 const FLYBY_VISIBILITY_SCORE_RANGE = 1;
-const ROCKET_FLYBY_START_SCORE = 3;
-const ROCKET_FLYBY_FIRST_TICK_MIN = 120;
-const ROCKET_FLYBY_FIRST_TICK_MAX = 240;
-const ROCKET_FLYBY_TICK_MIN = 1200;
-const ROCKET_FLYBY_TICK_MAX = 3000;
+const ROCKET_FLYBY_START_SCORE = 10;
+const ROCKET_FLYBY_FIRST_TICK_MIN = 90;
+const ROCKET_FLYBY_FIRST_TICK_MAX = 180;
+const ROCKET_FLYBY_TICK_MIN = 900;
+const ROCKET_FLYBY_TICK_MAX = 2100;
 /* Raketvuur gebruikt dezelfde lokale pixelcoördinaten als raket-only-flight-test.html. */
 const ROCKET_FLAME_BASE_SIZE = 180;
 const ROCKET_FLAME_X = 0;
@@ -336,11 +336,11 @@ const ROCKET_FLAME_LENGTH = 78;
 const ROCKET_FLAME_WIDTH = 36;
 const ROCKET_SMOKE_X = 0;
 const ROCKET_SMOKE_Y = 126;
-const METEOR_FLYBY_START_SCORE = 5;
-const METEOR_FLYBY_FIRST_TICK_MIN = 180;
-const METEOR_FLYBY_FIRST_TICK_MAX = 360;
-const METEOR_FLYBY_TICK_MIN = 900;
-const METEOR_FLYBY_TICK_MAX = 1800;
+const METEOR_FLYBY_START_SCORE = 30;
+const METEOR_FLYBY_FIRST_TICK_MIN = 420;
+const METEOR_FLYBY_FIRST_TICK_MAX = 780;
+const METEOR_FLYBY_TICK_MIN = 1800;
+const METEOR_FLYBY_TICK_MAX = 3600;
 const METEOR_FLYBY_CHANCE = 1;
 const METEOR_FLYBY_COOLDOWN = 3;
 const METEOR_SMOKE_PUFFS = 8;
@@ -370,7 +370,7 @@ const ASTRONAUT_FALL_TOTAL_FRAMES = 20;
 const ASTRONAUT_TOTAL_FRAMES = 16;
 const ASTRONAUT_JUMP_FRAME_SEQUENCE = [6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
 const ASTRONAUT_JUMP_MOTION_STOPS = [0.0, 0.08, 0.18, 0.42, 0.47, 0.5, 0.58, 0.68, 0.78, 0.88, 0.96, 1.0];
-const FALL_ANIMATION_FRAMES = 32;
+const FALL_ANIMATION_FRAMES = 48;
 const WRONG_FALL_START_OFFSET = 14;
 const FRAME_TIME_AT_60FPS = 1000 / 60;
 const RESPAWN_JUMP_FRAMES = 28;
@@ -1542,14 +1542,36 @@ function App() {
 
             if (type === "rocket") {
                 const flyRight = Math.random() < 0.5;
-                const fromX = flyRight ? -0.12 : 1.12;
-                const toX = flyRight ? 1.08 : -0.08;
-                const fromY = 0.18 + Math.random() * 0.60;
-                const toY = clamp(fromY + (-0.24 + Math.random() * 0.48), 0.10, 0.88);
+                const routeMode = Math.random();
+                let fromX, toX, fromY, toY;
+
+                if (routeMode < 0.35) {
+                    // schuin omhoog, vrij steil
+                    fromX = flyRight ? -0.10 : 1.10;
+                    toX = flyRight ? 0.72 : 0.28;
+                    fromY = 0.82 + Math.random() * 0.12;
+                    toY = 0.04 + Math.random() * 0.16;
+                } else if (routeMode < 0.60) {
+                    // bijna recht omhoog
+                    const laneX = flyRight
+                        ? (0.18 + Math.random() * 0.18)
+                        : (0.64 + Math.random() * 0.18);
+                    fromX = laneX;
+                    toX = clamp(laneX + (-0.05 + Math.random() * 0.10), 0.10, 0.90);
+                    fromY = 0.90 + Math.random() * 0.06;
+                    toY = 0.02 + Math.random() * 0.14;
+                } else {
+                    // bestaande diagonale flyby, iets vaker omhoog
+                    fromX = flyRight ? -0.12 : 1.12;
+                    toX = flyRight ? 1.08 : -0.08;
+                    fromY = 0.24 + Math.random() * 0.56;
+                    toY = clamp(fromY - (0.12 + Math.random() * 0.34), 0.06, 0.72);
+                }
+
                 return {
                     ...base, mode: "flyby", depth: "front", size: 174 + Math.round(Math.random() * 38),
                     fromX, fromY, toX, toY, alignToPath: true, angleOffset: Math.PI / 2,
-                    mirrorX: false, flybyDuration: 220 + Math.round(Math.random() * 90),
+                    mirrorX: false, flybyDuration: 200 + Math.round(Math.random() * 80),
                     levelDropPx: 0, fadeFloor: 1
                 };
             }
@@ -1666,11 +1688,13 @@ function App() {
 
         const triggerMeteorFlybyForScore = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
+            if (s.score % 30 !== 0) return;
             if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) scheduleNextMeteorFlyby(s, true);
         };
         const updateTimedMeteorFlybys = (s) => {
             if (s.score < METEOR_FLYBY_START_SCORE) return;
             pruneExpiredMeteorFlybys(s);
+            if (s.score % 30 !== 0) return;
             if (!Number.isFinite(s.deco.nextMeteorFlybyTick)) scheduleNextMeteorFlyby(s, true);
             if (s.time.tick >= (s.deco.nextMeteorFlybyTick ?? Number.POSITIVE_INFINITY)) spawnMeteorFlyby(s);
         };
@@ -1814,13 +1838,23 @@ function App() {
         const getAstronautFrame = (s) => {
             const jumpAsset = assetsRef.current.astronaut;
             const fallAsset = assetsRef.current.astronautFall;
-            if (s.gameState === "falling" && fallAsset && fallAsset.ready && fallAsset.frames.length) {
-                const total = fallAsset.frames.length;
-                const fallTime = s.fallingPlatform?.fallTime || 0;
-                const visualProgress = clamp(fallTime / FALL_ANIMATION_FRAMES, 0, 1);
-                const fallFrameIndex = visualProgress >= 1 ? total - 1 : Math.min(total - 1, Math.floor(visualProgress * (total - 1)));
-                return { frame: fallAsset.frames[fallFrameIndex], mode: "fall" };
+
+            if (s.gameState === "falling") {
+                if (fallAsset && fallAsset.ready && fallAsset.frames.length) {
+                    const total = fallAsset.frames.length;
+                    const fallTime = s.fallingPlatform?.fallTime || 0;
+                    const visualProgress = clamp(fallTime / FALL_ANIMATION_FRAMES, 0, 1);
+                    const fallFrameIndex = visualProgress >= 1
+                        ? total - 1
+                        : Math.min(total - 1, Math.floor(visualProgress * (total - 1)));
+                    return { frame: fallAsset.frames[fallFrameIndex], mode: "fall" };
+                }
+
+                if (jumpAsset && jumpAsset.ready && jumpAsset.frames.length) {
+                    return { frame: jumpAsset.frames[Math.max(0, jumpAsset.frames.length - 1)], mode: "fall" };
+                }
             }
+
             if (!jumpAsset || !jumpAsset.ready || !jumpAsset.frames.length) return null;
             const total = jumpAsset.frames.length;
             const maxFrameIndex = total - 1;
@@ -1830,6 +1864,7 @@ function App() {
                 const jumpState = getJumpAnimationState(animationT, total);
                 return { frame: jumpAsset.frames[Math.min(maxFrameIndex, jumpState.frameIndex)], mode: "jump" };
             }
+
             const loopFrameIndex = ((Math.floor(s.time.idleFrameClock) % total) + total) % total;
             return { frame: jumpAsset.frames[loopFrameIndex], mode: "idle" };
         };
