@@ -320,11 +320,11 @@ const MOON_SCORE = 8;
 const SATELLITE_SCORE = 14;
 const SPACE_RANDOM_START_SCORE = 20;
 const SPACE_RANDOM_INTERVAL = 6;
-const FLYBY_VISIBILITY_START_SCORE = 1;
-const FLYBY_VISIBILITY_SCORE_RANGE = 1; // direct zichtbaar vanaf lage score
-const ROCKET_FLYBY_START_SCORE = 3;
-const ROCKET_FLYBY_FIRST_TICK_MIN = 45;
-const ROCKET_FLYBY_FIRST_TICK_MAX = 120;
+const FLYBY_VISIBILITY_START_SCORE = 8;
+const FLYBY_VISIBILITY_SCORE_RANGE = 1;
+const ROCKET_FLYBY_START_SCORE = 8;
+const ROCKET_FLYBY_FIRST_TICK_MIN = 180;
+const ROCKET_FLYBY_FIRST_TICK_MAX = 480;
 const ROCKET_FLYBY_TICK_MIN = 1200;
 const ROCKET_FLYBY_TICK_MAX = 3000;
 /* Raketvuur gebruikt dezelfde lokale pixelcoördinaten als raket-only-flight-test.html. */
@@ -336,9 +336,9 @@ const ROCKET_FLAME_LENGTH = 78;
 const ROCKET_FLAME_WIDTH = 36;
 const ROCKET_SMOKE_X = 0;
 const ROCKET_SMOKE_Y = 126;
-const METEOR_FLYBY_START_SCORE = 5;
-const METEOR_FLYBY_CHANCE = 0.45;
-const METEOR_FLYBY_COOLDOWN = 3;
+const METEOR_FLYBY_START_SCORE = 10;
+const METEOR_FLYBY_CHANCE = 0.18;
+const METEOR_FLYBY_COOLDOWN = 5;
 const METEOR_SMOKE_PUFFS = 8;
 const METEOR_SMOKE_LENGTH = 1.28;
 const FIXED_SPACE_SCORE_EVENTS = Object.freeze({
@@ -1575,7 +1575,6 @@ function App() {
             ctx.restore();
         };
 
-
         const drawDirectionalSmokeTrail = (x, y, size, dx, dy, alpha, tick, options = {}) => {
             const lengthMultiplier = options.lengthMultiplier || 1;
             const puffCount = options.puffCount || METEOR_SMOKE_PUFFS;
@@ -1899,8 +1898,8 @@ function App() {
 
             if (type === "rocket") {
                 const flyRight = Math.random() < 0.5;
-                const fromX = flyRight ? -0.34 : 1.34;
-                const toX = flyRight ? 1.34 : -0.34;
+                const fromX = flyRight ? -0.20 : 1.20;
+                const toX = flyRight ? 1.14 : -0.14;
                 const fromY = 0.18 + Math.random() * 0.60;
                 const toY = clamp(fromY + (-0.24 + Math.random() * 0.48), 0.10, 0.88);
 
@@ -2024,12 +2023,13 @@ function App() {
             pruneExpiredRocketFlybys(s);
 
             const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
-            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
             const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
-            const hasMeteorInFlight = activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasRocketInFlight) return;
+
+            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const hasMeteorInFlight = activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
             if (hasMeteorInFlight) {
-                s.deco.nextRocketFlybyTick = s.time.tick + 120;
+                scheduleNextRocketFlyby(s, false);
                 return;
             }
 
@@ -2064,10 +2064,12 @@ function App() {
             if (Math.random() > METEOR_FLYBY_CHANCE) return;
 
             const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
-            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
+            if (hasMeteorInFlight) return;
+
+            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
             const hasRocketInFlight = activeRocketFlybys.some((obj) => obj && obj.type === "rocket");
-            if (hasMeteorInFlight || hasRocketInFlight) return;
+            if (hasRocketInFlight) return;
 
             s.deco.activeMeteorFlybys = [
                 ...activeFlybys,
