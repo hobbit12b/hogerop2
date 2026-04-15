@@ -316,15 +316,36 @@ const CLOUDS_LAYER_SPEED = 0.14;
 const SPACE_START = 1350;
 const STAR_FIELD_START = 1550;
 const MAX_VISIBLE_SPACE_OBJECTS = 1;
-const SPACE_RANDOM_START_SCORE = 16;
-const SPACE_RANDOM_INTERVAL = 5;
+const MOON_SCORE = 8;
+const SATELLITE_SCORE = 14;
+const SPACE_RANDOM_START_SCORE = 20;
+const SPACE_RANDOM_INTERVAL = 6;
+const FLYBY_VISIBILITY_START_SCORE = 8;
+const FLYBY_VISIBILITY_SCORE_RANGE = 1;
+const ROCKET_FLYBY_START_SCORE = 8;
+const ROCKET_FLYBY_FIRST_TICK_MIN = 90;
+const ROCKET_FLYBY_FIRST_TICK_MAX = 180;
+const ROCKET_FLYBY_TICK_MIN = 1200;
+const ROCKET_FLYBY_TICK_MAX = 3000;
+/* Raketvuur gebruikt dezelfde lokale pixelcoördinaten als raket-only-flight-test.html. */
+const ROCKET_FLAME_BASE_SIZE = 180;
+const ROCKET_FLAME_X = 0;
+const ROCKET_FLAME_Y = 92;
+const ROCKET_FLAME_ANGLE = Math.PI / 2;
+const ROCKET_FLAME_LENGTH = 78;
+const ROCKET_FLAME_WIDTH = 36;
+const ROCKET_SMOKE_X = 0;
+const ROCKET_SMOKE_Y = 126;
+const METEOR_FLYBY_START_SCORE = 10;
+const METEOR_FLYBY_CHANCE = 0.135;
+const METEOR_FLYBY_COOLDOWN = 5;
+const METEOR_SMOKE_PUFFS = 8;
+const METEOR_SMOKE_LENGTH = 1.28;
 const FIXED_SPACE_SCORE_EVENTS = Object.freeze({
-    5: "planet07",
-    11: "satellite"
+    [MOON_SCORE]: "planet07",
+    [SATELLITE_SCORE]: "satellite"
 });
 const RANDOM_SPACE_TYPES = Object.freeze([
-    "rocket",
-    "meteor",
     "ufo",
     "planet01",
     "planet02",
@@ -345,7 +366,7 @@ const ASTRONAUT_FALL_TOTAL_FRAMES = 20;
 const ASTRONAUT_TOTAL_FRAMES = 16;
 const ASTRONAUT_JUMP_FRAME_SEQUENCE = [6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
 const ASTRONAUT_JUMP_MOTION_STOPS = [0.0, 0.08, 0.18, 0.42, 0.47, 0.5, 0.58, 0.68, 0.78, 0.88, 0.96, 1.0];
-const FALL_ANIMATION_FRAMES = 18;
+const FALL_ANIMATION_FRAMES = 32;
 const WRONG_FALL_START_OFFSET = 14;
 const FRAME_TIME_AT_60FPS = 1000 / 60;
 const RESPAWN_JUMP_FRAMES = 28;
@@ -426,6 +447,15 @@ function clamp(v, min, max) {
 
 function lerp(a, b, t) {
     return a + (b - a) * t;
+}
+
+function quadraticBezier(p0, p1, p2, t) {
+    const mt = 1 - t;
+    return (mt * mt * p0) + (2 * mt * t * p1) + (t * t * p2);
+}
+
+function quadraticBezierTangent(p0, p1, p2, t) {
+    return 2 * (1 - t) * (p1 - p0) + 2 * t * (p2 - p1);
 }
 
 function easeInOut(t) {
@@ -815,7 +845,7 @@ function loadAssets() {
         ground: createBlackTransparentAsset("assets/bg-ground.png", 18),
         mountains: createBlackTransparentAsset("assets/bg-mountains.png", 20),
         clouds: createBlackTransparentAsset("assets/bg-clouds.png", 18),
-        rocket: createTransparentAsset("assets/raket.png", 10),
+        rocket: createImageAsset("assets/raket.png"),
         satellite: createTransparentAsset("assets/sateliet.png", 10),
         ufo: createTransparentAsset("assets/ufo.png", 10),
         meteor: createTransparentAsset("assets/meteoor.png", 8),
@@ -923,7 +953,12 @@ function App() {
         deco: {
             stars: createTwinkleStars(40),
             activeSpaceObject: null,
-            lastRandomSpaceType: null
+            activeRocketFlybys: [],
+            activeMeteorFlybys: [],
+            nextRocketFlybyTick: Number.POSITIVE_INFINITY,
+            pendingSpaceQueue: [],
+            lastRandomSpaceType: null,
+            lastMeteorScore: -999
         }
     });
 
@@ -1253,7 +1288,12 @@ function App() {
         s.fallingPlatform = null;
         s.lastPairCenterX = s.width * 0.5;
         s.deco.activeSpaceObject = null;
+        s.deco.activeRocketFlybys = [];
+        s.deco.activeMeteorFlybys = [];
+        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
+        s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastMeteorScore = -999;
         setTargetLetter("");
 
         s.currentPlatform = createPlatform(s.width / 2 - s.platformW / 2, s.height - 120, "", false);
@@ -1294,7 +1334,12 @@ function App() {
         s.time.idleFrameClock = 0;
         s.lastPairCenterX = s.width * 0.5;
         s.deco.activeSpaceObject = null;
+        s.deco.activeRocketFlybys = [];
+        s.deco.activeMeteorFlybys = [];
+        s.deco.nextRocketFlybyTick = Number.POSITIVE_INFINITY;
+        s.deco.pendingSpaceQueue = [];
         s.deco.lastRandomSpaceType = null;
+        s.deco.lastMeteorScore = -999;
 
         s.fallCameraStartY = s.cameraY;
         s.fallCameraTargetY = s.fallCameraStartY + Math.max(s.height * CAMERA_DROP_DISTANCE_FACTOR, s.stepUp * 0.92);
@@ -1439,6 +1484,150 @@ function App() {
             return asset.canvas || asset.img || null;
         };
 
+        const drawFloatingAsset = (asset, alpha, x, y, size, rotation = 0, mirrorX = false, options = {}) => {
+            if (!asset || alpha <= 0.01 || size <= 0) return;
+
+            const img = getImageFromAsset(asset);
+            if (!img || !img.width || !img.height) return;
+
+            const scale = size / Math.max(img.width, img.height);
+            const drawW = img.width * scale;
+            const drawH = img.height * scale;
+            const { rocketFlame = false, flameFlicker = 0 } = options;
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(x, y);
+            if (mirrorX) ctx.scale(-1, 1);
+            if (rotation) ctx.rotate(rotation);
+
+            if (rocketFlame) {
+                const localScale = size / ROCKET_FLAME_BASE_SIZE;
+                const flicker = 0.88
+                    + (Math.sin(flameFlicker * 0.23) * 0.08)
+                    + (Math.sin(flameFlicker * 0.61 + 1.4) * 0.06);
+                const flameLength = ROCKET_FLAME_LENGTH * localScale * flicker;
+                const flameWidth = ROCKET_FLAME_WIDTH * localScale;
+                const smokeX = ROCKET_SMOKE_X * localScale;
+                const smokeY = ROCKET_SMOKE_Y * localScale;
+                const flameX = ROCKET_FLAME_X * localScale;
+                const flameY = ROCKET_FLAME_Y * localScale;
+
+                ctx.save();
+                ctx.translate(smokeX, smokeY);
+                ctx.rotate(ROCKET_FLAME_ANGLE);
+                for (let i = 0; i < 5; i += 1) {
+                    const t = ((flameFlicker * 0.014) + i / 5) % 1;
+                    const puffX = -flameLength * (0.25 + t * 1.10);
+                    const puffY = Math.sin(flameFlicker * 0.13 + i * 1.7) * flameWidth * 0.18;
+                    ctx.globalAlpha = alpha * 0.24 * (1 - t);
+                    ctx.fillStyle = '#dbe2ea';
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        puffX,
+                        puffY,
+                        flameWidth * (0.18 + t * 0.20),
+                        flameWidth * (0.14 + t * 0.18),
+                        0,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                ctx.save();
+                ctx.translate(flameX, flameY);
+                ctx.rotate(ROCKET_FLAME_ANGLE);
+
+                const outerGrad = ctx.createLinearGradient(-flameLength, 0, 8 * localScale, 0);
+                outerGrad.addColorStop(0, 'rgba(255, 80, 0, 0)');
+                outerGrad.addColorStop(0.25, 'rgba(255, 100, 0, 0.45)');
+                outerGrad.addColorStop(0.60, 'rgba(255, 172, 24, 0.86)');
+                outerGrad.addColorStop(1, 'rgba(255, 235, 160, 0.18)');
+
+                ctx.fillStyle = outerGrad;
+                ctx.beginPath();
+                ctx.moveTo(8 * localScale, 0);
+                ctx.quadraticCurveTo(-flameLength * 0.35, -flameWidth, -flameLength, 0);
+                ctx.quadraticCurveTo(-flameLength * 0.35, flameWidth, 8 * localScale, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                const innerLength = flameLength * 0.56;
+                const innerGrad = ctx.createLinearGradient(-innerLength, 0, 6 * localScale, 0);
+                innerGrad.addColorStop(0, 'rgba(255, 150, 0, 0)');
+                innerGrad.addColorStop(0.45, 'rgba(255, 235, 100, 0.95)');
+                innerGrad.addColorStop(1, 'rgba(255, 255, 235, 0.6)');
+
+                ctx.fillStyle = innerGrad;
+                ctx.beginPath();
+                ctx.moveTo(6 * localScale, 0);
+                ctx.quadraticCurveTo(-innerLength * 0.35, -flameWidth * 0.45, -innerLength, 0);
+                ctx.quadraticCurveTo(-innerLength * 0.35, flameWidth * 0.45, 6 * localScale, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+        };
+
+
+        const drawDirectionalSmokeTrail = (x, y, size, dx, dy, alpha, tick, options = {}) => {
+            const lengthMultiplier = options.lengthMultiplier || 1;
+            const puffCount = options.puffCount || METEOR_SMOKE_PUFFS;
+            const magnitude = Math.hypot(dx, dy) || 1;
+            const dirX = dx / magnitude;
+            const dirY = dy / magnitude;
+            const normalX = -dirY;
+            const normalY = dirX;
+            const baseLength = size * METEOR_SMOKE_LENGTH * lengthMultiplier;
+            const baseRadius = Math.max(8, size * 0.10);
+
+            ctx.save();
+            ctx.globalCompositeOperation = "source-over";
+
+            for (let i = 0; i < puffCount; i += 1) {
+                const t = ((tick * 0.010) + i / puffCount) % 1;
+                const distance = baseLength * (0.18 + t * 1.05);
+                const wobble = Math.sin(tick * 0.09 + i * 1.63) * baseRadius * (0.28 + t * 0.45);
+                const puffX = x - dirX * distance + normalX * wobble;
+                const puffY = y - dirY * distance + normalY * wobble;
+                const radiusX = baseRadius * (0.44 + t * 1.10);
+                const radiusY = baseRadius * (0.30 + t * 0.78);
+                const puffAlpha = alpha * 0.30 * (1 - t) * (0.72 + Math.sin(tick * 0.05 + i) * 0.12);
+
+                if (puffAlpha <= 0.01) continue;
+                ctx.globalAlpha = puffAlpha;
+                ctx.fillStyle = "#d7d2c8";
+                ctx.beginPath();
+                ctx.ellipse(puffX, puffY, radiusX, radiusY, Math.atan2(dirY, dirX), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const grad = ctx.createLinearGradient(x - dirX * baseLength, y - dirY * baseLength, x, y);
+            grad.addColorStop(0, "rgba(210,205,195,0)");
+            grad.addColorStop(0.42, `rgba(220,215,205,${alpha * 0.14})`);
+            grad.addColorStop(1, `rgba(238,232,220,${alpha * 0.22})`);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = Math.max(8, size * 0.085);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(x - dirX * baseLength, y - dirY * baseLength);
+            ctx.quadraticCurveTo(
+                x - dirX * baseLength * 0.52 + normalX * baseRadius * 0.7,
+                y - dirY * baseLength * 0.52 + normalY * baseRadius * 0.7,
+                x - dirX * size * 0.20,
+                y - dirY * size * 0.20
+            );
+            ctx.stroke();
+            ctx.restore();
+        };
+
         const getLayerMetrics = (asset, s, climb, speed, options = {}) => {
             const {
                 anchor = "bottom",
@@ -1523,9 +1712,9 @@ function App() {
         const drawCloudLayer = (s, climb) => {
             const metrics = getLayerMetrics(assetsRef.current.clouds, s, climb, CLOUDS_LAYER_SPEED, {
                 anchor: "top",
-                heightRatio: 1,
+                heightRatio: 0.84,
                 widthBleed: 0.02,
-                baseOffset: -s.height * 0.05
+                baseOffset: -s.height * 0.28
             });
             if (!metrics) return;
 
@@ -1543,7 +1732,7 @@ function App() {
                 anchor: "bottom",
                 heightRatio: 0.72,
                 widthBleed: 0.01,
-                baseOffset: -s.height * 0.06
+                baseOffset: s.height * 0.08
             });
             if (!metrics) return;
 
@@ -1609,17 +1798,7 @@ function App() {
             return null;
         };
 
-        const getTimeBasedObjectProgress = (obj, s) => {
-            if (!obj) return -1;
-            const duration = Math.max(1, obj.duration || 1);
-            return (s.time.tick - obj.startTick) / duration;
-        };
-
-        const getVisibilityEnvelope = (progress) => {
-            const fadeIn = smoothStep(0.00, 0.14, progress);
-            const fadeOut = 1 - smoothStep(0.82, 1.00, progress);
-            return fadeIn * fadeOut;
-        };
+        const getCurrentClimb = (s) => Math.max(0, s.baseCameraY - s.cameraY);
 
         const chooseRandomSpaceType = (lastType = null) => {
             const pool = RANDOM_SPACE_TYPES.filter((type) => type !== lastType);
@@ -1627,104 +1806,185 @@ function App() {
             return source[Math.floor(Math.random() * source.length)] || RANDOM_SPACE_TYPES[0];
         };
 
-        const createSpaceObjectInstance = (type, startTick = 0) => {
+        const getNextSpaceTriggerScore = (score) => {
+            if (score < MOON_SCORE) return MOON_SCORE;
+            if (score < SATELLITE_SCORE) return SATELLITE_SCORE;
+            if (score < SPACE_RANDOM_START_SCORE) return SPACE_RANDOM_START_SCORE;
+            return score + SPACE_RANDOM_INTERVAL;
+        };
+
+        const getQuadraticDropScale = (size) => {
+            const normalized = clamp((size - 150) / 150, 0, 1);
+            return 0.28 + Math.pow(normalized, 2) * 0.9;
+        };
+
+        const createSpaceObjectInstance = (type, startTick = 0, spawnClimb = 0, spawnScore = 0) => {
+            const nextTriggerScore = getNextSpaceTriggerScore(spawnScore);
+            const panDirection = Math.random() < 0.5 ? -1 : 1;
             const base = {
                 type,
                 startTick,
-                duration: 320,
+                spawnClimb,
+                spawnScore,
+                endScore: nextTriggerScore,
                 size: 220,
-                depth: "front",
+                depth: "back",
                 mirrorX: false,
                 rotation: 0,
-                floatAmp: 0,
-                floatSpeed: 0.0016,
+                rotationDrift: 0,
                 phase: Math.random() * Math.PI * 2,
                 alignToPath: false,
-                angleOffset: 0
+                angleOffset: 0,
+                mode: "drift",
+                entryXOffset: 0,
+                entryYOffset: -0.02,
+                entryDuration: 96,
+                driftAmpX: 8,
+                driftAmpY: 6,
+                driftSpeedX: 0.0036,
+                driftSpeedY: 0.0028,
+                levelDropPx: 16,
+                scaleLevelDropBySize: false,
+                flybyDuration: 250,
+                panXPerTick: 0,
+                panYPerTick: 0,
+                bobAmpY: 6,
+                bobSpeedY: 0.0024,
+                bobAmpX: 3,
+                bobSpeedX: 0.0017,
+                fadeFloor: 0.28
             };
 
             const planetVariants = {
-                planet01: { duration: 360, depth: "back", size: 230, fromX: 1.12, fromY: 0.20, toX: 0.68, toY: 0.16, rotation: 0.03, floatAmp: 8 },
-                planet02: { duration: 350, depth: "back", size: 218, fromX: -0.12, fromY: 0.28, toX: 0.34, toY: 0.23, rotation: -0.04, floatAmp: 8 },
-                planet03: { duration: 360, depth: "back", size: 282, fromX: 1.10, fromY: 0.25, toX: 0.62, toY: 0.19, rotation: -0.08, floatAmp: 9 },
-                planet04: { duration: 360, depth: "back", size: 250, fromX: -0.10, fromY: 0.18, toX: 0.30, toY: 0.16, rotation: 0.05, floatAmp: 7 },
-                planet05: { duration: 330, depth: "back", size: 175, fromX: 1.08, fromY: 0.29, toX: 0.74, toY: 0.24, rotation: 0.04, floatAmp: 7 },
-                planet06: { duration: 345, depth: "back", size: 210, fromX: -0.14, fromY: 0.20, toX: 0.36, toY: 0.16, rotation: 0.05, floatAmp: 8 },
-                planet07: { duration: 380, depth: "back", size: 230, fromX: 1.10, fromY: 0.19, toX: 0.74, toY: 0.15, rotation: 0.02, floatAmp: 6 }
+                planet01: { size: 228, x: 0.76, y: 0.18, entryXOffset: 0.028, entryYOffset: -0.018, entryDuration: 104, panXPerTick: -0.030 * panDirection, panYPerTick: 0.020, bobAmpY: 7, bobSpeedY: 0.0015, bobAmpX: 3, bobSpeedX: 0.0011, rotation: 0.02, rotationDrift: 0.007, levelDropPx: 30, scaleLevelDropBySize: true },
+                planet02: { size: 218, x: 0.28, y: 0.24, entryXOffset: -0.026, entryYOffset: -0.018, entryDuration: 106, panXPerTick: 0.028 * panDirection, panYPerTick: 0.018, bobAmpY: 5, bobSpeedY: 0.0016, bobAmpX: 2, bobSpeedX: 0.0011, rotation: -0.03, rotationDrift: 0.007, levelDropPx: 28, scaleLevelDropBySize: true },
+                planet03: { size: 280, x: 0.68, y: 0.21, entryXOffset: 0.024, entryYOffset: -0.018, entryDuration: 110, panXPerTick: -0.026 * panDirection, panYPerTick: 0.020, bobAmpY: 7, bobSpeedY: 0.0014, bobAmpX: 3, bobSpeedX: 0.0010, rotation: -0.05, rotationDrift: 0.008, levelDropPx: 38, scaleLevelDropBySize: true },
+                planet04: { size: 246, x: 0.30, y: 0.17, entryXOffset: -0.024, entryYOffset: -0.016, entryDuration: 102, panXPerTick: 0.029 * panDirection, panYPerTick: 0.018, bobAmpY: 6, bobSpeedY: 0.0015, bobAmpX: 3, bobSpeedX: 0.0011, rotation: 0.04, rotationDrift: 0.007, levelDropPx: 33, scaleLevelDropBySize: true },
+                planet05: { size: 176, x: 0.73, y: 0.25, entryXOffset: 0.022, entryYOffset: -0.014, entryDuration: 104, panXPerTick: -0.031 * panDirection, panYPerTick: 0.017, bobAmpY: 5, bobSpeedY: 0.0016, bobAmpX: 2, bobSpeedX: 0.0012, rotation: 0.03, rotationDrift: 0.006, levelDropPx: 22, scaleLevelDropBySize: true },
+                planet06: { size: 210, x: 0.34, y: 0.18, entryXOffset: -0.024, entryYOffset: -0.014, entryDuration: 100, panXPerTick: 0.030 * panDirection, panYPerTick: 0.018, bobAmpY: 6, bobSpeedY: 0.0016, bobAmpX: 3, bobSpeedX: 0.0011, rotation: 0.04, rotationDrift: 0.007, levelDropPx: 26, scaleLevelDropBySize: true },
+                planet07: { size: 172, x: 0.78, y: 0.16, entryXOffset: 0.020, entryYOffset: -0.014, entryDuration: 114, panXPerTick: -0.022 * panDirection, panYPerTick: 0.014, bobAmpY: 4, bobSpeedY: 0.0014, bobAmpX: 2, bobSpeedX: 0.0010, rotation: 0.015, rotationDrift: 0.005, levelDropPx: 18, scaleLevelDropBySize: true }
             };
 
             if (planetVariants[type]) {
-                return { ...base, ...planetVariants[type] };
+                const variant = planetVariants[type];
+                const sizeMultiplier = 0.84 + Math.random() * 0.34;
+                return {
+                    ...base,
+                    ...variant,
+                    size: Math.round(variant.size * sizeMultiplier)
+                };
             }
 
             if (type === "satellite") {
                 return {
                     ...base,
-                    duration: 340,
-                    depth: "back",
-                    size: 210,
-                    fromX: -0.20,
-                    fromY: 0.31,
-                    toX: 1.16,
-                    toY: 0.35,
-                    rotation: 0.16,
-                    floatAmp: 3
+                    size: 198,
+                    x: 0.72,
+                    y: 0.24,
+                    entryXOffset: 0.035,
+                    entryYOffset: -0.018,
+                    entryDuration: 100,
+                    panXPerTick: -0.028,
+                    panYPerTick: 0.016,
+                    bobAmpY: 4,
+                    bobSpeedY: 0.0019,
+                    bobAmpX: 2,
+                    bobSpeedX: 0.0013,
+                    rotation: 0.12,
+                    rotationDrift: 0.012,
+                    levelDropPx: 22,
+                    fadeFloor: 0.34
                 };
             }
 
             if (type === "rocket") {
+                const flyRight = Math.random() < 0.5;
+                const fromX = flyRight ? -0.34 : 1.34;
+                const toX = flyRight ? 1.34 : -0.34;
+                const fromY = 0.18 + Math.random() * 0.60;
+                const toY = clamp(fromY + (-0.24 + Math.random() * 0.48), 0.10, 0.88);
+
                 return {
                     ...base,
-                    duration: 250,
+                    mode: "flyby",
                     depth: "front",
-                    size: 200,
-                    fromX: -0.20,
-                    fromY: 0.88,
-                    toX: 1.12,
-                    toY: 0.08,
+                    size: 174 + Math.round(Math.random() * 38),
+                    fromX,
+                    fromY,
+                    toX,
+                    toY,
                     alignToPath: true,
-                    angleOffset: Math.PI / 2
+                    angleOffset: Math.PI / 2,
+                    mirrorX: false,
+                    flybyDuration: 220 + Math.round(Math.random() * 90),
+                    levelDropPx: 0,
+                    fadeFloor: 1
                 };
             }
 
             if (type === "meteor") {
+                const flyRight = Math.random() < 0.5;
+                const fromX = flyRight ? -0.18 : 1.18;
+                const toX = flyRight ? 1.12 : -0.12;
+                const fromY = 0.06 + Math.random() * 0.28;
+                const toY = clamp(fromY + 0.44 + Math.random() * 0.32, 0.54, 1.04);
+
                 return {
                     ...base,
-                    duration: 220,
+                    mode: "flyby",
                     depth: "front",
-                    size: 220,
-                    fromX: 1.16,
-                    fromY: 0.04,
-                    toX: -0.18,
-                    toY: 0.74,
+                    size: 184 + Math.round(Math.random() * 34),
+                    fromX,
+                    fromY,
+                    toX,
+                    toY,
                     alignToPath: true,
-                    angleOffset: -Math.PI * 0.75
+                    angleOffset: flyRight ? -Math.PI * 0.75 : Math.PI * 0.75,
+                    mirrorX: !flyRight,
+                    flybyDuration: 170 + Math.round(Math.random() * 40),
+                    levelDropPx: 0,
+                    fadeFloor: 1
                 };
             }
 
             if (type === "ufo") {
                 return {
                     ...base,
-                    duration: 310,
                     depth: "front",
-                    size: 195,
-                    fromX: -0.18,
-                    fromY: 0.27,
-                    toX: 1.12,
-                    toY: 0.20,
+                    size: 188,
+                    x: 0.34,
+                    y: 0.22,
+                    entryXOffset: -0.035,
+                    entryYOffset: -0.016,
+                    entryDuration: 98,
+                    panXPerTick: 0.036,
+                    panYPerTick: 0.018,
+                    bobAmpY: 5,
+                    bobSpeedY: 0.0021,
+                    bobAmpX: 3,
+                    bobSpeedX: 0.0016,
                     rotation: 0.03,
-                    floatAmp: 5
+                    rotationDrift: 0.012,
+                    levelDropPx: 20,
+                    fadeFloor: 0.34
                 };
             }
 
             return {
                 ...base,
-                duration: 320,
-                fromX: 0.2,
-                fromY: 0.2,
-                toX: 0.8,
-                toY: 0.2
+                x: 0.5,
+                y: 0.22
             };
+        };
+
+        const activateNextSpaceObject = (s, type = null) => {
+            const nextType = type || null;
+            if (!nextType) {
+                s.deco.activeSpaceObject = null;
+                return;
+            }
+
+            s.deco.activeSpaceObject = createSpaceObjectInstance(nextType, s.time.tick, getCurrentClimb(s), s.score);
         };
 
         const triggerSpaceAssetForScore = (s) => {
@@ -1737,79 +1997,253 @@ function App() {
 
             if (!nextType) return;
 
-            s.deco.activeSpaceObject = createSpaceObjectInstance(nextType, s.time.tick);
             if (RANDOM_SPACE_TYPES.includes(nextType)) {
                 s.deco.lastRandomSpaceType = nextType;
             }
+
+            activateNextSpaceObject(s, nextType);
+        };
+
+        const scheduleNextRocketFlyby = (s, firstAfterUnlock = false) => {
+            const minTicks = firstAfterUnlock ? ROCKET_FLYBY_FIRST_TICK_MIN : ROCKET_FLYBY_TICK_MIN;
+            const maxTicks = firstAfterUnlock ? ROCKET_FLYBY_FIRST_TICK_MAX : ROCKET_FLYBY_TICK_MAX;
+            s.deco.nextRocketFlybyTick = s.time.tick + minTicks + Math.random() * Math.max(1, maxTicks - minTicks);
+        };
+
+        const pruneExpiredRocketFlybys = (s) => {
+            const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            s.deco.activeRocketFlybys = activeFlybys.filter((obj) => {
+                if (!obj || obj.type !== "rocket") return false;
+                const elapsedTicks = Math.max(0, s.time.tick - (obj.startTick || 0));
+                const maxFlightTicks = Math.max(1, obj.flybyDuration || 240) + 36;
+                return elapsedTicks < maxFlightTicks;
+            });
+        };
+
+        const spawnRocketFlyby = (s) => {
+            pruneExpiredRocketFlybys(s);
+
+            const activeFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const hasRocketInFlight = activeFlybys.some((obj) => obj && obj.type === "rocket");
+            const hasMeteorInFlight = activeMeteorFlybys.some((obj) => obj && obj.type === "meteor");
+            if (hasRocketInFlight) return;
+            if (hasMeteorInFlight) {
+                s.deco.nextRocketFlybyTick = s.time.tick + 120;
+                return;
+            }
+
+            s.deco.activeRocketFlybys = [
+                ...activeFlybys,
+                createSpaceObjectInstance("rocket", s.time.tick, getCurrentClimb(s), s.score)
+            ];
+            scheduleNextRocketFlyby(s, false);
+        };
+
+        const triggerRocketFlybyForScore = (s) => {
+            if (s.score < ROCKET_FLYBY_START_SCORE) return;
+            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) {
+                scheduleNextRocketFlyby(s, true);
+            }
+        };
+
+        const updateTimedRocketFlybys = (s) => {
+            if (s.score < ROCKET_FLYBY_START_SCORE) return;
+            pruneExpiredRocketFlybys(s);
+            if (!Number.isFinite(s.deco.nextRocketFlybyTick)) {
+                scheduleNextRocketFlyby(s, true);
+            }
+            if (s.time.tick >= (s.deco.nextRocketFlybyTick ?? Number.POSITIVE_INFINITY)) {
+                spawnRocketFlyby(s);
+            }
+        };
+
+        const triggerMeteorFlybyForScore = (s) => {
+            if (s.score < METEOR_FLYBY_START_SCORE) return;
+            if ((s.score - (s.deco.lastMeteorScore ?? -999)) < METEOR_FLYBY_COOLDOWN) return;
+            if (Math.random() > METEOR_FLYBY_CHANCE) return;
+
+            const activeFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            const hasMeteorInFlight = activeFlybys.some((obj) => obj && obj.type === "meteor");
+            const hasRocketInFlight = activeRocketFlybys.some((obj) => obj && obj.type === "rocket");
+            if (hasMeteorInFlight || hasRocketInFlight) return;
+
+            s.deco.activeMeteorFlybys = [
+                ...activeFlybys,
+                createSpaceObjectInstance("meteor", s.time.tick, getCurrentClimb(s), s.score)
+            ];
+            s.deco.lastMeteorScore = s.score;
         };
 
         const getSpaceObjectWorldState = (obj, s) => {
-            const progressRaw = getTimeBasedObjectProgress(obj, s);
-            if (progressRaw < 0 || progressRaw > 1) return null;
+            if (!obj) return null;
 
-            const progress = easeInOut(progressRaw);
-            const visibility = getVisibilityEnvelope(progressRaw);
-            let x = s.width * lerp(obj.fromX, obj.toX, progress);
-            let y = s.height * lerp(obj.fromY, obj.toY, progress);
+            const elapsedTicks = Math.max(0, s.time.tick - (obj.startTick || 0));
+            const scoreDelta = Math.max(0, s.score - (obj.spawnScore || 0));
+            const scoreWindow = Math.max(1, (obj.endScore || ((obj.spawnScore || 0) + 1)) - (obj.spawnScore || 0));
+            const fadeProgress = clamp(scoreDelta / scoreWindow, 0, 1);
+            const entryDuration = Math.max(18, obj.entryDuration || 42);
+            const entranceProgress = smoothStep(0, 1, clamp(elapsedTicks / entryDuration, 0, 1));
+            const fadeFloor = obj.fadeFloor ?? 0.06;
+            const fadeDown = lerp(1, fadeFloor, smoothStep(0, 1, fadeProgress));
+            const levelDropBase = obj.levelDropPx || 0;
+            const levelDropScale = obj.scaleLevelDropBySize ? getQuadraticDropScale(obj.size || 220) : 1;
+            const verticalFollow = smoothStep(0, 1, fadeProgress) * levelDropBase * levelDropScale;
+
+            let x = 0;
+            let y = 0;
             let rotation = obj.rotation || 0;
+            let visibility = smoothStep(0, 1, entranceProgress) * fadeDown;
+            let progress = fadeProgress;
+            let outOfView = false;
 
-            if (obj.alignToPath) {
-                const dx = s.width * (obj.toX - obj.fromX);
-                const dy = s.height * (obj.toY - obj.fromY);
-                rotation = Math.atan2(dy, dx) + (obj.angleOffset || 0);
-            }
+            if (obj.mode === "flyby") {
+                const flightProgress = clamp(elapsedTicks / Math.max(1, obj.flybyDuration || 240), 0, 1);
+                const fromX = obj.fromX ?? -0.1;
+                const fromY = obj.fromY ?? 0.5;
+                const toX = obj.toX ?? 1.1;
+                const toY = obj.toY ?? 0.5;
 
-            if (obj.floatAmp) {
+                x = s.width * lerp(fromX, toX, flightProgress);
+                y = s.height * lerp(fromY, toY, flightProgress) + verticalFollow;
+                progress = flightProgress;
+                visibility = smoothStep(0, 1, clamp(elapsedTicks / 16, 0, 1));
+
+                if (obj.alignToPath) {
+                    const dx = s.width * (toX - fromX);
+                    const dy = s.height * (toY - fromY);
+                    rotation = Math.atan2(dy, dx) + (obj.angleOffset || 0);
+                }
+
+                outOfView = flightProgress >= 1 || (
+                    x < -(obj.size || 220) * 1.35 ||
+                    x > s.width + (obj.size || 220) * 1.35 ||
+                    y < -(obj.size || 220) * 1.35 ||
+                    y > s.height + (obj.size || 220) * 1.35
+                );
+            } else {
                 const phase = obj.phase || 0;
-                const floatSpeed = obj.floatSpeed || 0.0015;
-                x += Math.cos(s.time.tick * floatSpeed + phase) * obj.floatAmp * 0.35;
-                y += Math.sin(s.time.tick * floatSpeed + phase) * obj.floatAmp;
+                const baseX = s.width * ((obj.x ?? 0.5) + (1 - entranceProgress) * (obj.entryXOffset || 0));
+                const baseY = s.height * ((obj.y ?? 0.22) + (1 - entranceProgress) * (obj.entryYOffset || 0));
+                const panX = elapsedTicks * (obj.panXPerTick || 0);
+                const panY = elapsedTicks * (obj.panYPerTick || 0);
+                const bobAmpY = obj.bobAmpY || 0;
+                const bobSpeedY = obj.bobSpeedY || 0.0024;
+                const bobAmpX = obj.bobAmpX || 0;
+                const bobSpeedX = obj.bobSpeedX || 0.0018;
+
+                x = baseX + panX;
+                x += Math.sin(elapsedTicks * bobSpeedX + phase) * bobAmpX;
+
+                y = baseY + panY;
+                y += Math.sin(elapsedTicks * bobSpeedY + phase * 1.07) * bobAmpY;
+                y += verticalFollow;
+
+                rotation = (obj.rotation || 0) + Math.sin(elapsedTicks * 0.0022 + phase) * (obj.rotationDrift || 0);
             }
 
             const isFront = obj.depth === "front";
             return {
                 x,
                 y,
-                progress: progressRaw,
+                progress,
                 visibility,
                 size: obj.size * (isFront ? 1.03 : 1),
                 rotation,
                 alpha: (isFront ? 0.96 : 0.86) * visibility,
-                mirrorX: !!obj.mirrorX
+                mirrorX: !!obj.mirrorX,
+                outOfView
             };
         };
 
         const drawSpaceAssets = (s, climb) => {
-            const visibleSpace = clamp((climb - SPACE_START) / 400, 0, 1);
-            if (visibleSpace <= 0.01) return;
+            const visibleSpace = clamp((climb - SPACE_START) / 450, 0, 1);
+            const visibleFlybys = clamp((s.score - FLYBY_VISIBILITY_START_SCORE + 1) / Math.max(1, FLYBY_VISIBILITY_SCORE_RANGE), 0, 1);
+            const hasActiveFlybys = (Array.isArray(s.deco.activeRocketFlybys) && s.deco.activeRocketFlybys.length > 0)
+                || (Array.isArray(s.deco.activeMeteorFlybys) && s.deco.activeMeteorFlybys.length > 0);
+
+            if (visibleSpace <= 0.01 && visibleFlybys <= 0.01 && !hasActiveFlybys) return;
 
             const active = s.deco.activeSpaceObject;
-            if (!active) return;
-
-            const state = getSpaceObjectWorldState(active, s);
-            if (!state) {
-                s.deco.activeSpaceObject = null;
-                return;
+            if (active && visibleSpace > 0.01) {
+                const state = getSpaceObjectWorldState(active, s);
+                if (state && !state.outOfView) {
+                    drawFloatingAsset(
+                        getSpaceAsset(active.type),
+                        visibleSpace * state.alpha,
+                        state.x,
+                        state.y,
+                        state.size,
+                        state.rotation,
+                        state.mirrorX,
+                        {
+                            rocketFlame: active.type === "rocket",
+                            flameFlicker: s.time.tick + (active.startTick || 0)
+                        }
+                    );
+                }
             }
 
-            if (
-                state.x < -state.size * 1.3 ||
-                state.x > s.width + state.size * 1.3 ||
-                state.y < -state.size * 1.3 ||
-                state.y > s.height + state.size * 1.3
-            ) {
-                return;
-            }
+            const activeRocketFlybys = Array.isArray(s.deco.activeRocketFlybys) ? s.deco.activeRocketFlybys : [];
+            const remainingRocketFlybys = [];
 
-            drawFloatingAsset(
-                getSpaceAsset(active.type),
-                visibleSpace * state.alpha,
-                state.x,
-                state.y,
-                state.size,
-                state.rotation,
-                state.mirrorX
-            );
+            activeRocketFlybys.forEach((obj) => {
+                const state = getSpaceObjectWorldState(obj, s);
+                if (!state || state.outOfView) return;
+
+                remainingRocketFlybys.push(obj);
+                drawFloatingAsset(
+                    getSpaceAsset(obj.type),
+                    visibleFlybys * state.alpha,
+                    state.x,
+                    state.y,
+                    state.size,
+                    state.rotation,
+                    state.mirrorX,
+                    {
+                        rocketFlame: obj.type === "rocket",
+                        flameFlicker: s.time.tick + (obj.startTick || 0)
+                    }
+                );
+            });
+
+            s.deco.activeRocketFlybys = remainingRocketFlybys;
+
+            const activeMeteorFlybys = Array.isArray(s.deco.activeMeteorFlybys) ? s.deco.activeMeteorFlybys : [];
+            const remainingMeteorFlybys = [];
+
+            activeMeteorFlybys.forEach((obj) => {
+                const state = getSpaceObjectWorldState(obj, s);
+                if (!state || state.outOfView) return;
+
+                remainingMeteorFlybys.push(obj);
+
+                const meteorDx = ((obj.toX ?? 1.1) - (obj.fromX ?? -0.1)) * s.width;
+                const meteorDy = ((obj.toY ?? 0.7) - (obj.fromY ?? 0.1)) * s.height;
+                drawDirectionalSmokeTrail(
+                    state.x,
+                    state.y,
+                    state.size,
+                    meteorDx,
+                    meteorDy,
+                    visibleFlybys * state.alpha,
+                    s.time.tick + (obj.startTick || 0),
+                    { lengthMultiplier: 1.05, puffCount: METEOR_SMOKE_PUFFS }
+                );
+
+                drawFloatingAsset(
+                    getSpaceAsset(obj.type),
+                    visibleFlybys * state.alpha,
+                    state.x,
+                    state.y,
+                    state.size,
+                    state.rotation,
+                    state.mirrorX
+                );
+            });
+
+            s.deco.activeMeteorFlybys = remainingMeteorFlybys;
         };
 
         const drawAtmosphereOverlay = (s, climb) => {
@@ -2061,6 +2495,7 @@ function App() {
             s.time.tick += dtFrames;
             s.time.idleFrameClock += (Math.max(4, s.settings.idleAnimFps) / 60) * dtFrames;
             s.cameraY += (s.targetCameraY - s.cameraY) * Math.min(1, CAMERA_LERP * dtFrames);
+            updateTimedRocketFlybys(s);
 
             if (s.gameState === "waiting" || s.gameState === "landingPause") {
                 updatePlayerIdlePose();
@@ -2097,6 +2532,8 @@ function App() {
                         s.score += 1;
                         setScore(s.score);
                         triggerSpaceAssetForScore(s);
+                        triggerRocketFlybyForScore(s);
+                        triggerMeteorFlybyForScore(s);
 
                         prepareNextRound();
                         s.nextPlatforms = s.pendingNextPlatforms;
@@ -2238,8 +2675,8 @@ function App() {
             const climb = Math.max(0, s.baseCameraY - s.cameraY);
 
             drawSky(s, climb);
-            drawMountainsLayer(s, climb);
             drawCloudLayer(s, climb);
+            drawMountainsLayer(s, climb);
             drawGroundLayer(s, climb);
             drawStars(s, climb);
             drawSpaceAssets(s, climb);
